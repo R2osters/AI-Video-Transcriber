@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -55,7 +55,33 @@ TEMP_DIR.mkdir(exist_ok=True)
 
 # 初始化处理器
 video_processor = VideoProcessor()
-transcriber = Transcriber()
+
+# Whisper 模型：默认取环境变量，前端可按请求覆盖（缓存实例避免重复加载）
+WHISPER_MODEL_DEFAULT = os.getenv("WHISPER_MODEL_SIZE", "base")
+WHISPER_ALLOWED_MODELS = {
+    "tiny", "tiny.en", "base", "base.en", "small", "small.en",
+    "medium", "medium.en", "large-v1", "large-v2", "large-v3", "large",
+    "turbo", "large-v3-turbo", "distil-large-v3",
+}
+import threading
+
+transcriber = Transcriber(WHISPER_MODEL_DEFAULT)
+_transcribers = {WHISPER_MODEL_DEFAULT: transcriber}
+_transcribers_lock = threading.Lock()
+
+def get_transcriber(model_size: str = "") -> Transcriber:
+    """按请求返回对应模型的转录器；空值或非法值回退默认模型。"""
+    size = (model_size or "").strip()
+    if not size or size == WHISPER_MODEL_DEFAULT:
+        return transcriber
+    if size not in WHISPER_ALLOWED_MODELS:
+        logger.warning(f"未知 Whisper 模型 '{size}'，回退默认 {WHISPER_MODEL_DEFAULT}")
+        return transcriber
+    with _transcribers_lock:
+        if size not in _transcribers:
+            _transcribers[size] = Transcriber(size)
+        return _transcribers[size]
+
 summarizer = Summarizer()
 translator = Translator()
 
@@ -446,6 +472,7 @@ async def _enqueue_upload_job(
     api_key: str,
     model_base_url: str,
     model_id: str,
+    whisper_model: str = "",
 ) -> dict:
     """保存上传文件并入队 process_upload_task，返回 {task_id, message}。"""
     raw_name = file.filename or "upload.bin"
@@ -514,6 +541,7 @@ async def _enqueue_upload_job(
             api_key,
             model_base_url,
             model_id,
+            whisper_model,
         )
     )
     active_tasks[task_id] = bg
@@ -529,6 +557,7 @@ async def process_video(
     model_base_url: str = Form(default=""),
     model_id: str = Form(default=""),
     download_video: str = Form(default="1"),
+    whisper_model: str = Form(default=""),
     file: Optional[UploadFile] = File(None),
 ):
     """
@@ -539,7 +568,7 @@ async def process_video(
     try:
         if file is not None and (file.filename or "").strip():
             return await _enqueue_upload_job(
-                file, summary_language, api_key, model_base_url, model_id
+                file, summary_language, api_key, model_base_url, model_id, whisper_model
             )
 
         stripped = (url or "").strip()
@@ -579,7 +608,8 @@ async def process_video(
         # 创建并跟踪异步任务
         task = asyncio.create_task(
             process_video_task(
-                task_id, url, summary_language, api_key, model_base_url, model_id, want_video
+                task_id, url, summary_language, api_key, model_base_url, model_id, want_video,
+                whisper_model,
             )
         )
         active_tasks[task_id] = task
@@ -600,6 +630,7 @@ async def process_video_task(
     model_base_url: str = "",
     model_id: str = "",
     want_video: bool = True,
+    whisper_model: str = "",
 ):
     """
     异步处理视频任务
@@ -699,7 +730,10 @@ async def process_video_task(
             save_tasks(tasks)
             await broadcast_task_update(task_id, tasks[task_id])
 
-            raw_script = await transcriber.transcribe(audio_path)
+            req_transcriber = get_transcriber(whisper_model)
+            raw_script = await req_transcriber.transcribe(audio_path)
+            # 下游 _run_post_extract_pipeline 从全局实例读语言，保持同步
+            transcriber.last_detected_language = req_transcriber.last_detected_language
 
         await _run_post_extract_pipeline(
             task_id=task_id,
@@ -745,10 +779,11 @@ async def process_upload(
     api_key: str = Form(default=""),
     model_base_url: str = Form(default=""),
     model_id: str = Form(default=""),
+    whisper_model: str = Form(default=""),
 ):
     """独立上传入口；逻辑与 multipart 带 file 的 /api/process-video 相同。"""
     return await _enqueue_upload_job(
-        file, summary_language, api_key, model_base_url, model_id
+        file, summary_language, api_key, model_base_url, model_id, whisper_model
     )
 
 
@@ -762,6 +797,7 @@ async def process_upload_task(
     api_key: str = "",
     model_base_url: str = "",
     model_id: str = "",
+    whisper_model: str = "",
 ):
     source_ref = f"upload:{original_name}"
     try:
@@ -815,7 +851,9 @@ async def process_upload_task(
             save_tasks(tasks)
             await broadcast_task_update(task_id, tasks[task_id])
 
-            raw_script = await transcriber.transcribe(audio_path)
+            req_transcriber = get_transcriber(whisper_model)
+            raw_script = await req_transcriber.transcribe(audio_path)
+            transcriber.last_detected_language = req_transcriber.last_detected_language
 
         # 上传的原件本身就是「原视频」，无需再下载，直接挂到结果上
         is_media_upload = ext_lower != ".txt"
@@ -1006,6 +1044,134 @@ async def get_active_tasks():
         "processing_urls": processing_count,
         "task_ids": list(active_tasks.keys())
     }
+
+# ── 实时转录：浏览器麦克风 → 本服务代理 → OpenAI Realtime API ──────────────
+# 代理模式：API Key 只在服务端使用，绝不下发到浏览器之外的第三方。
+OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?intent=transcription"
+LIVE_TRANSCRIBE_MODELS = {"gpt-4o-mini-transcribe", "gpt-4o-transcribe", "whisper-1"}
+
+
+@app.websocket("/ws/live-transcribe")
+async def live_transcribe(ws: WebSocket):
+    """
+    实时转录 WebSocket。协议：
+      客户端 → 服务端: {"type":"start","api_key":...,"model"?,"language"?}
+                       {"type":"audio","audio":"<base64 pcm16 24kHz mono>"}
+                       {"type":"stop"}
+      服务端 → 客户端: {"type":"ready"} / {"type":"delta","text"} /
+                       {"type":"utterance","text"} / {"type":"error","message"}
+    """
+    await ws.accept()
+    oai = None
+    try:
+        try:
+            import websockets
+        except ImportError:
+            await ws.send_json({"type": "error", "message": "Server missing 'websockets' package (pip install websockets)"})
+            return
+
+        try:
+            cfg = json.loads(await asyncio.wait_for(ws.receive_text(), timeout=15))
+        except (asyncio.TimeoutError, json.JSONDecodeError):
+            await ws.send_json({"type": "error", "message": "Expected start message"})
+            return
+
+        api_key = (cfg.get("api_key") or "").strip()
+        if cfg.get("type") != "start" or not api_key:
+            await ws.send_json({"type": "error", "message": "OpenAI API key required"})
+            return
+
+        model = cfg.get("model") or "gpt-4o-mini-transcribe"
+        if model not in LIVE_TRANSCRIBE_MODELS:
+            model = "gpt-4o-mini-transcribe"
+        language = (cfg.get("language") or "").strip()
+
+        headers = {"Authorization": f"Bearer {api_key}", "OpenAI-Beta": "realtime=v1"}
+        try:
+            oai = await websockets.connect(
+                OPENAI_REALTIME_URL, additional_headers=headers, max_size=16 * 1024 * 1024
+            )
+        except TypeError:
+            # websockets < 13 用 extra_headers
+            oai = await websockets.connect(
+                OPENAI_REALTIME_URL, extra_headers=headers, max_size=16 * 1024 * 1024
+            )
+
+        transcription_cfg = {"model": model}
+        if language:
+            transcription_cfg["language"] = language
+        await oai.send(json.dumps({
+            "type": "transcription_session.update",
+            "session": {
+                "input_audio_format": "pcm16",
+                "input_audio_transcription": transcription_cfg,
+                "turn_detection": {"type": "server_vad", "silence_duration_ms": 600},
+            },
+        }))
+        await ws.send_json({"type": "ready"})
+
+        async def pump_client():
+            """浏览器 → OpenAI：转发音频块，stop 即结束。"""
+            while True:
+                data = json.loads(await ws.receive_text())
+                mtype = data.get("type")
+                if mtype == "audio" and data.get("audio"):
+                    await oai.send(json.dumps({
+                        "type": "input_audio_buffer.append",
+                        "audio": data["audio"],
+                    }))
+                elif mtype == "stop":
+                    return
+
+        async def pump_openai():
+            """OpenAI → 浏览器：只转发转录相关事件。"""
+            async for raw in oai:
+                evt = json.loads(raw)
+                etype = evt.get("type", "")
+                if etype == "conversation.item.input_audio_transcription.delta":
+                    await ws.send_json({"type": "delta", "text": evt.get("delta", "")})
+                elif etype == "conversation.item.input_audio_transcription.completed":
+                    await ws.send_json({"type": "utterance", "text": evt.get("transcript", "")})
+                elif etype == "error":
+                    err = evt.get("error") or {}
+                    await ws.send_json({"type": "error", "message": err.get("message", "OpenAI realtime error")})
+
+        client_task = asyncio.create_task(pump_client())
+        openai_task = asyncio.create_task(pump_openai())
+        try:
+            done, pending = await asyncio.wait(
+                {client_task, openai_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            for p in pending:
+                p.cancel()
+            for d in done:
+                exc = d.exception()
+                if exc and not isinstance(exc, (WebSocketDisconnect, asyncio.CancelledError)):
+                    raise exc
+        finally:
+            for t in (client_task, openai_task):
+                if not t.done():
+                    t.cancel()
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"实时转录会话失败: {e}")
+        try:
+            await ws.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass
+    finally:
+        if oai is not None:
+            try:
+                await oai.close()
+            except Exception:
+                pass
+        try:
+            await ws.close()
+        except Exception:
+            pass
+
 
 if __name__ == "__main__":
     import uvicorn

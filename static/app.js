@@ -65,6 +65,19 @@ class VideoTranscriber {
         error_upload_type:       'Unsupported file type',
         error_upload_empty:      'File is empty',
         error_upload_size:       (mb) => `File exceeds ${mb} MB limit`,
+        whisper_model:           'Whisper Model (local)',
+        whisper_default:         '— server default —',
+        live_btn:                'Live mic',
+        live_hint:               'Live transcription — requires an OpenAI API key in AI Settings',
+        live_stop:               'Stop',
+        live_use:                'Optimize & summarize',
+        live_listening:          'Listening…',
+        live_connecting:         'Connecting…',
+        live_stopped:            'Stopped',
+        live_need_key:           'Enter your OpenAI API key in AI Settings first (Realtime API requires OpenAI)',
+        live_empty:              'No speech captured',
+        live_mic_error:          'Microphone access failed: ',
+        live_error:              'Live transcription error: ',
         keep_video:              'Keep original video',
         original_media:          'Original video',
         original_media_audio:    'Original audio',
@@ -123,6 +136,19 @@ class VideoTranscriber {
         error_upload_type:       '不支持的文件类型',
         error_upload_empty:      '文件为空',
         error_upload_size:       (mb) => `文件超过 ${mb} MB 限制`,
+        whisper_model:           'Whisper 模型（本地）',
+        whisper_default:         '— 服务器默认 —',
+        live_btn:                '实时麦克风',
+        live_hint:               '实时转录 — 需要在 AI 设置中填入 OpenAI API Key',
+        live_stop:               '停止',
+        live_use:                '优化并总结',
+        live_listening:          '正在聆听…',
+        live_connecting:         '连接中…',
+        live_stopped:            '已停止',
+        live_need_key:           '请先在 AI 设置中填入 OpenAI API Key（Realtime API 仅支持 OpenAI）',
+        live_empty:              '未捕获到语音',
+        live_mic_error:          '麦克风访问失败：',
+        live_error:              '实时转录错误：',
         keep_video:              '保留原视频',
         original_media:          '原视频',
         original_media_audio:    '原音频',
@@ -182,7 +208,16 @@ class VideoTranscriber {
     this.fetchModelsBtn     = document.getElementById('fetchModelsBtn');
     this.fetchStatus        = document.getElementById('fetchStatus');
     this.modelSelect        = document.getElementById('modelSelect');
+    this.whisperModelSel    = document.getElementById('whisperModel');
     this.fetchIcon          = document.getElementById('fetchIcon');
+    // live mic
+    this.liveBtn            = document.getElementById('liveBtn');
+    this.livePanel          = document.getElementById('livePanel');
+    this.liveText           = document.getElementById('liveText');
+    this.liveStatus         = document.getElementById('liveStatus');
+    this.liveStopBtn        = document.getElementById('liveStopBtn');
+    this.liveUseBtn         = document.getElementById('liveUseBtn');
+    this._live              = null;
     this.uploadZone         = document.getElementById('uploadZone');
     this.uploadPickBtn      = document.getElementById('uploadPickBtn');
     this.fileInput          = document.getElementById('fileInput');
@@ -218,9 +253,18 @@ class VideoTranscriber {
     this.apiKeyInput.addEventListener('input', debouncedFetch);
 
     // Persist settings
-    [this.modelBaseUrl, this.apiKeyInput, this.modelSelect, this.summaryLangSel, this.keepVideo].forEach(el => {
+    [this.modelBaseUrl, this.apiKeyInput, this.modelSelect, this.whisperModelSel, this.summaryLangSel, this.keepVideo].forEach(el => {
       if (el) el.addEventListener('change', () => this._saveSettings());
     });
+
+    // Live mic
+    if (this.liveBtn) {
+      this.liveBtn.addEventListener('click', () => {
+        if (this._live) this._stopLive(); else this._startLive();
+      });
+      this.liveStopBtn.addEventListener('click', () => this._stopLive());
+      this.liveUseBtn.addEventListener('click', () => this._useLiveTranscript());
+    }
 
     // Tabs
     this.tabBtns.forEach(btn => {
@@ -315,6 +359,7 @@ class VideoTranscriber {
       baseUrl:  this.modelBaseUrl.value,
       apiKey:   this.apiKeyInput.value,
       model:    this.modelSelect.value,
+      whisperModel: this.whisperModelSel ? this.whisperModelSel.value : '',
       summaryLang: this.summaryLangSel.value,
       keepVideo: this.keepVideo ? this.keepVideo.checked : true,
     };
@@ -329,6 +374,7 @@ class VideoTranscriber {
       if (s.baseUrl)     this.modelBaseUrl.value = s.baseUrl;
       if (s.apiKey)      this.apiKeyInput.value  = s.apiKey;
       if (s.summaryLang) this.summaryLangSel.value = s.summaryLang;
+      if (this.whisperModelSel && s.whisperModel) this.whisperModelSel.value = s.whisperModel;
       if (this.keepVideo && typeof s.keepVideo === 'boolean') this.keepVideo.checked = s.keepVideo;
       // Model options will be restored after fetching
       this._savedModel = s.model || '';
@@ -430,6 +476,8 @@ class VideoTranscriber {
       if (apiKey)  fd.append('api_key',       apiKey);
       if (baseUrl) fd.append('model_base_url', baseUrl);
       if (modelId) fd.append('model_id',       modelId);
+      const whisperM = this.whisperModelSel ? this.whisperModelSel.value : '';
+      if (whisperM) fd.append('whisper_model', whisperM);
 
       const resp = await fetch(`${this.apiBase}/process-video`, { method: 'POST', body: fd });
       if (!resp.ok) {
@@ -487,6 +535,8 @@ class VideoTranscriber {
       if (apiKey)  fd.append('api_key',       apiKey);
       if (baseUrl) fd.append('model_base_url', baseUrl);
       if (modelId) fd.append('model_id',       modelId);
+      const whisperM = this.whisperModelSel ? this.whisperModelSel.value : '';
+      if (whisperM) fd.append('whisper_model', whisperM);
 
       const resp = await fetch(`${this.apiBase}/process-video`, { method: 'POST', body: fd });
       if (!resp.ok) {
@@ -512,6 +562,130 @@ class VideoTranscriber {
       this._setLoading(false);
       this._hideProgress();
     }
+  }
+
+  /* ── Live mic (realtime transcription) ────────────────── */
+  async _startLive() {
+    const apiKey = this.apiKeyInput.value.trim();
+    if (!apiKey) { this._showError(this.t('live_need_key')); return; }
+
+    this._hideError();
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+      });
+    } catch (e) {
+      this._showError(this.t('live_mic_error') + e.message);
+      return;
+    }
+
+    const live = { stream, ctx: null, node: null, ws: null, ready: false, utterances: [], delta: '' };
+    this._live = live;
+    this.livePanel.hidden = false;
+    this.livePanel.classList.remove('stopped');
+    this.liveText.innerHTML = '';
+    this.liveUseBtn.disabled = true;
+    this.liveStatus.textContent = this.t('live_connecting');
+    this.liveBtn.classList.add('recording');
+
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      live.ctx = ctx;
+      await ctx.audioWorklet.addModule('/static/pcm-worklet.js');
+      const src = ctx.createMediaStreamSource(stream);
+      const node = new AudioWorkletNode(ctx, 'pcm-worklet');
+      live.node = node;
+      src.connect(node); // pas de connexion à destination → pas d'écho
+
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws/live-transcribe`);
+      live.ws = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: 'start', api_key: apiKey }));
+      };
+      node.port.onmessage = (e) => {
+        if (live.ready && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'audio', audio: this._i16ToB64(e.data) }));
+        }
+      };
+      ws.onmessage = (e) => {
+        let msg;
+        try { msg = JSON.parse(e.data); } catch (_) { return; }
+        if (msg.type === 'ready') {
+          live.ready = true;
+          this.liveStatus.textContent = this.t('live_listening');
+        } else if (msg.type === 'delta') {
+          live.delta += msg.text || '';
+          this._renderLive(live);
+        } else if (msg.type === 'utterance') {
+          const text = (msg.text || '').trim();
+          live.delta = '';
+          if (text) live.utterances.push(text);
+          this._renderLive(live);
+          if (live.utterances.length) this.liveUseBtn.disabled = false;
+        } else if (msg.type === 'error') {
+          this._showError(this.t('live_error') + (msg.message || ''));
+          this._stopLive();
+        }
+      };
+      ws.onclose = () => { if (this._live === live) this._stopLive(); };
+      ws.onerror = () => { /* onclose suit toujours */ };
+    } catch (e) {
+      this._showError(this.t('live_error') + e.message);
+      this._stopLive();
+    }
+  }
+
+  _stopLive() {
+    const live = this._live;
+    if (!live) return;
+    this._live = null;
+    try { if (live.ws && live.ws.readyState === WebSocket.OPEN) live.ws.send(JSON.stringify({ type: 'stop' })); } catch (_) {}
+    try { if (live.ws) live.ws.close(); } catch (_) {}
+    try { live.stream.getTracks().forEach(t => t.stop()); } catch (_) {}
+    try { if (live.ctx) live.ctx.close(); } catch (_) {}
+    this.liveBtn.classList.remove('recording');
+    this.livePanel.classList.add('stopped');
+    this.liveStatus.textContent = this.t('live_stopped');
+    // conserve la transcription affichée pour relecture / envoi au pipeline
+    this._lastLiveTranscript = live.utterances.join('\n\n');
+    this.liveUseBtn.disabled = !this._lastLiveTranscript.trim();
+  }
+
+  _renderLive(live) {
+    const done = live.utterances.map(u => this._escapeHtml(u)).join('<br><br>');
+    const delta = live.delta ? `<span class="live-delta">${this._escapeHtml(live.delta)}</span>` : '';
+    this.liveText.innerHTML = done + (done && delta ? '<br><br>' : '') + delta;
+    this.liveText.scrollTop = this.liveText.scrollHeight;
+  }
+
+  _useLiveTranscript() {
+    if (this._live) this._stopLive();
+    const text = (this._lastLiveTranscript || '').trim();
+    if (!text) { this._showError(this.t('live_empty')); return; }
+    // Réutilise le pipeline upload .txt existant (optimize → translate → summarize)
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-');
+    const file = new File([text], `live-recording-${stamp}.txt`, { type: 'text/plain' });
+    this.livePanel.hidden = true;
+    this._startFileUpload(file);
+  }
+
+  _i16ToB64(i16) {
+    const bytes = new Uint8Array(i16.buffer, i16.byteOffset, i16.byteLength);
+    let bin = '';
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(bin);
+  }
+
+  _escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
   }
 
   /* ── SSE ──────────────────────────────────────────────── */

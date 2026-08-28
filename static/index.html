@@ -796,6 +796,87 @@
       .settings-body.open { max-height: 320px; }
       .media-video { max-height: 260px; }
     }
+    /* ── Live mic (realtime transcription) ─────────────── */
+    .live-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .btn-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.09);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all .18s ease;
+    }
+    .btn-live:hover {
+      background: var(--surface-3);
+      box-shadow: 0 0 0 3px rgba(var(--glow), .08);
+    }
+    .btn-live.recording {
+      border-color: rgba(239, 68, 68, .5);
+      color: #fca5a5;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, .12);
+    }
+    .live-hint { font-size: 11.5px; color: var(--text-dim); }
+    .live-panel {
+      margin-top: 12px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      background: var(--surface-2);
+      padding: 14px 16px;
+    }
+    .live-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #ef4444;
+      animation: livePulse 1.2s ease-in-out infinite;
+    }
+    .live-panel.stopped .live-dot { background: var(--text-dim); animation: none; }
+    @keyframes livePulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+    .live-text {
+      min-height: 64px;
+      max-height: 220px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.65;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+    .live-text .live-delta { color: var(--text-muted); font-style: italic; }
+    .live-actions { display: flex; gap: 10px; margin-top: 12px; }
+    .btn-live-stop, .btn-live-use {
+      padding: 7px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.1);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 12.5px;
+      cursor: pointer;
+      transition: all .18s ease;
+    }
+    .btn-live-stop:hover { border-color: rgba(239,68,68,.5); color: #fca5a5; }
+    .btn-live-use:not(:disabled):hover {
+      border-color: rgba(var(--glow), .45);
+      box-shadow: 0 0 0 3px rgba(var(--glow), .1);
+    }
+    .btn-live-use:disabled { opacity: .4; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -853,6 +934,26 @@
       </button>
     </div>
     <input type="file" id="fileInput" accept=".txt,.mp3,.mp4,.m4a,.wav,.webm,.mkv,.ogg,.flac" hidden>
+
+    <!-- Live mic: streams to OpenAI Realtime API through the backend proxy -->
+    <div class="live-row">
+      <button type="button" class="btn-live" id="liveBtn">
+        <i class="fas fa-microphone"></i>
+        <span data-i18n="live_btn">Live mic</span>
+      </button>
+      <span class="live-hint" data-i18n="live_hint">Live transcription — requires an OpenAI API key in AI Settings</span>
+    </div>
+    <div class="live-panel" id="livePanel" hidden>
+      <div class="live-head">
+        <span class="live-dot"></span>
+        <span id="liveStatus"></span>
+      </div>
+      <div class="live-text" id="liveText"></div>
+      <div class="live-actions">
+        <button type="button" class="btn-live-stop" id="liveStopBtn" data-i18n="live_stop">Stop</button>
+        <button type="button" class="btn-live-use" id="liveUseBtn" data-i18n="live_use" disabled>Optimize &amp; summarize</button>
+      </div>
+    </div>
   </div>
 
   <!-- Settings row: Summary Language + keep-video switch + AI Settings toggle -->
@@ -931,6 +1032,20 @@
           <label class="s-label" data-i18n="model_select">Model</label>
           <select id="modelSelect" class="s-select">
             <option value="" data-i18n="model_default">— use server default —</option>
+          </select>
+        </div>
+
+        <!-- Whisper model (local transcription) -->
+        <div>
+          <label class="s-label" data-i18n="whisper_model">Whisper Model (local)</label>
+          <select id="whisperModel" class="s-select">
+            <option value="" data-i18n="whisper_default">— server default —</option>
+            <option value="tiny">tiny (fastest)</option>
+            <option value="base">base</option>
+            <option value="small">small</option>
+            <option value="medium">medium</option>
+            <option value="large-v3">large-v3 (best)</option>
+            <option value="large-v3-turbo">large-v3-turbo (fast + accurate)</option>
           </select>
         </div>
 
@@ -1035,6 +1150,6 @@
   </div>
 </main>
 
-<script src="/static/app.js?v=20260818"></script>
+<script src="/static/app.js?v=20260828"></script>
 </body>
 </html>
