@@ -34,6 +34,8 @@ class App {
     this.histGroup = 'day';
     this.models = [];           // [{id, name}]
     this.selectedModel = '';
+    this._live = null;          // session micro live en cours
+    this._lastLiveTranscript = '';
 
     /* Progression simulée entre deux événements serveur */
     this.sp = { current: 0, target: 15, stage: 'preparing', interval: null };
@@ -150,8 +152,16 @@ class App {
       this._saveSettings();
     });
     $('keepVideo').addEventListener('change', () => this._saveSettings());
+    $('whisperModel').addEventListener('change', () => this._saveSettings());
 
-    window.addEventListener('beforeunload', () => this._stopSSE());
+    /* Micro live */
+    $('liveBtn').addEventListener('click', () => {
+      if (this._live) this._stopLive(); else this._startLive();
+    });
+    $('liveStopBtn').addEventListener('click', () => this._stopLive());
+    $('liveUseBtn').addEventListener('click', () => this._useLiveTranscript());
+
+    window.addEventListener('beforeunload', () => { this._stopSSE(); if (this._live) this._stopLive(); });
   }
 
   /* ── Paramètres (localStorage) ────────────────────────── */
@@ -163,6 +173,7 @@ class App {
       models: this.models.slice(0, 100),
       summaryLang: $('summaryLanguage').value,
       keepVideo: $('keepVideo').checked,
+      whisperModel: $('whisperModel').value,
     };
     try { localStorage.setItem('vt_settings', JSON.stringify(s)); } catch (_) {}
   }
@@ -175,6 +186,7 @@ class App {
     if (s.apiKey) $('apiKeyInput').value = s.apiKey;
     if (s.summaryLang) { $('summaryLanguage').value = s.summaryLang; $('defaultLang').value = s.summaryLang; }
     if (typeof s.keepVideo === 'boolean') $('keepVideo').checked = s.keepVideo;
+    if (s.whisperModel) $('whisperModel').value = s.whisperModel;
     if (Array.isArray(s.models) && s.models.length) {
       this.models = s.models;
       this.selectedModel = s.model || '';
@@ -318,6 +330,138 @@ class App {
     if (apiKey) fd.append('api_key', apiKey);
     if (baseUrl) fd.append('model_base_url', baseUrl);
     if (this.selectedModel) fd.append('model_id', this.selectedModel);
+    const whisperM = $('whisperModel').value;
+    if (whisperM) fd.append('whisper_model', whisperM);
+  }
+
+  /* ── Micro live (transcription temps réel) ────────────── */
+  async _startLive() {
+    const apiKey = $('apiKeyInput').value.trim();
+    if (!apiKey) {
+      this._toast('Renseignez d’abord votre clé API OpenAI dans Paramètres (l’API Realtime nécessite OpenAI)');
+      return;
+    }
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+      });
+    } catch (e) {
+      this._toast('Accès au micro refusé : ' + e.message);
+      return;
+    }
+
+    const live = { stream, ctx: null, node: null, ws: null, ready: false, utterances: [], delta: '' };
+    this._live = live;
+    $('livePanel').hidden = false;
+    $('livePanel').classList.remove('stopped');
+    $('liveText').textContent = '';
+    $('liveUseBtn').disabled = true;
+    $('liveStatus').textContent = 'Connexion…';
+    $('liveBtn').classList.add('recording');
+    $('liveBtnLabel').textContent = 'Arrêter';
+
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      live.ctx = ctx;
+      await ctx.audioWorklet.addModule('/static/pcm-worklet.js');
+      const src = ctx.createMediaStreamSource(stream);
+      const node = new AudioWorkletNode(ctx, 'pcm-worklet');
+      live.node = node;
+      src.connect(node); // pas de connexion à destination → pas d'écho
+
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${proto}://${location.host}/ws/live-transcribe`);
+      live.ws = ws;
+
+      ws.onopen = () => ws.send(JSON.stringify({ type: 'start', api_key: apiKey }));
+      node.port.onmessage = (e) => {
+        if (live.ready && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'audio', audio: this._i16ToB64(e.data) }));
+        }
+      };
+      ws.onmessage = (e) => {
+        let msg;
+        try { msg = JSON.parse(e.data); } catch (_) { return; }
+        if (msg.type === 'ready') {
+          live.ready = true;
+          $('liveStatus').textContent = 'À l’écoute…';
+        } else if (msg.type === 'delta') {
+          live.delta += msg.text || '';
+          this._renderLive(live);
+        } else if (msg.type === 'utterance') {
+          const text = (msg.text || '').trim();
+          live.delta = '';
+          if (text) live.utterances.push(text);
+          this._renderLive(live);
+          if (live.utterances.length) $('liveUseBtn').disabled = false;
+        } else if (msg.type === 'error') {
+          this._toast('Erreur transcription live : ' + (msg.message || ''));
+          this._stopLive();
+        }
+      };
+      ws.onclose = () => { if (this._live === live) this._stopLive(); };
+    } catch (e) {
+      this._toast('Erreur transcription live : ' + e.message);
+      this._stopLive();
+    }
+  }
+
+  _stopLive() {
+    const live = this._live;
+    if (!live) return;
+    this._live = null;
+    try { if (live.ws && live.ws.readyState === WebSocket.OPEN) live.ws.send(JSON.stringify({ type: 'stop' })); } catch (_) {}
+    try { if (live.ws) live.ws.close(); } catch (_) {}
+    try { live.stream.getTracks().forEach(t => t.stop()); } catch (_) {}
+    try { if (live.ctx) live.ctx.close(); } catch (_) {}
+    $('liveBtn').classList.remove('recording');
+    $('liveBtnLabel').textContent = 'Micro live';
+    $('livePanel').classList.add('stopped');
+    $('liveStatus').textContent = 'Arrêté';
+    // conserve la transcription pour relecture / envoi au pipeline
+    this._lastLiveTranscript = live.utterances.join('\n\n');
+    $('liveUseBtn').disabled = !this._lastLiveTranscript.trim();
+  }
+
+  _renderLive(live) {
+    // Rendu via DOM (pas d'innerHTML) — le transcript vient d'une API externe
+    const box = $('liveText');
+    box.textContent = '';
+    live.utterances.forEach((u, i) => {
+      if (i) box.appendChild(document.createTextNode('\n\n'));
+      box.appendChild(document.createTextNode(u));
+    });
+    if (live.delta) {
+      if (live.utterances.length) box.appendChild(document.createTextNode('\n\n'));
+      const span = document.createElement('span');
+      span.className = 'live-delta';
+      span.textContent = live.delta;
+      box.appendChild(span);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+
+  _useLiveTranscript() {
+    if (this._live) this._stopLive();
+    const text = (this._lastLiveTranscript || '').trim();
+    if (!text) { this._toast('Aucune parole capturée'); return; }
+    // Réinjecte dans le pipeline upload .txt existant (optimisation → traduction → résumé)
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-');
+    const file = new File([text], `micro-live-${stamp}.txt`, { type: 'text/plain' });
+    $('livePanel').hidden = true;
+    this._startFile(file);
+  }
+
+  _i16ToB64(i16) {
+    const bytes = new Uint8Array(i16.buffer, i16.byteOffset, i16.byteLength);
+    let bin = '';
+    const CHUNK = 0x8000;
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(bin);
   }
 
   async _launch(fd, jobInfo) {

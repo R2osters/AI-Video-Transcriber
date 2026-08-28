@@ -546,6 +546,45 @@
       .opt:last-child { margin-left: 0 !important; }
       .hist-entry .meta { display: none; }
     }
+    /* ── Micro live ─────────────────────────────────────── */
+    .live-row { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+    .btn-live {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface); color: var(--ink);
+      font-size: 13px; transition: all .18s ease;
+    }
+    .btn-live:hover { border-color: var(--line); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .btn-live.recording {
+      border-color: rgba(220, 60, 40, .55); color: #B3341F;
+      box-shadow: 0 0 0 3px rgba(220, 60, 40, .12);
+    }
+    .live-hint { font-size: 11.5px; color: var(--muted); }
+    .live-panel {
+      margin-top: 12px; padding: 14px 16px;
+      border: 1px solid var(--border); border-radius: 14px;
+      background: var(--surface);
+    }
+    .live-head {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--warm-gray); margin-bottom: 8px;
+      font-family: var(--mono);
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #DC3C28; animation: livePulse 1.2s ease-in-out infinite;
+    }
+    .live-panel.stopped .live-dot { background: var(--faint); animation: none; }
+    @keyframes livePulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+    .live-text {
+      min-height: 60px; max-height: 220px; overflow-y: auto;
+      font-size: 14px; line-height: 1.65; color: var(--ink-body);
+      white-space: pre-wrap;
+    }
+    .live-text .live-delta { color: var(--muted); font-style: italic; }
+    .live-actions { display: flex; gap: 10px; margin-top: 12px; }
+    .live-actions .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -622,6 +661,27 @@
           <div class="dropzone-hint" id="dropHint">mp4 · mkv · webm · mp3 · wav · m4a · ogg · flac · txt — 200 Mo max</div>
           <input type="file" id="fileInput" hidden accept=".txt,.mp3,.mp4,.m4a,.wav,.webm,.mkv,.ogg,.flac">
         </div>
+
+        <!-- Micro live : streaming vers l'API Realtime OpenAI via le proxy backend -->
+        <div class="live-row">
+          <button type="button" class="btn-live" id="liveBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0"/><path d="M12 19v3"/></svg>
+            <span id="liveBtnLabel">Micro live</span>
+          </button>
+          <span class="live-hint">Transcription en direct — nécessite une clé API OpenAI (Paramètres)</span>
+        </div>
+        <div class="live-panel" id="livePanel" hidden>
+          <div class="live-head">
+            <span class="live-dot"></span>
+            <span id="liveStatus"></span>
+          </div>
+          <div class="live-text" id="liveText"></div>
+          <div class="live-actions">
+            <button type="button" class="btn-secondary" id="liveStopBtn">Arrêter</button>
+            <button type="button" class="btn-primary" id="liveUseBtn" disabled>Optimiser &amp; résumer</button>
+          </div>
+        </div>
+
         <div class="options-row">
           <div class="opt">
             <span class="opt-label">Langue du résumé</span>
@@ -861,6 +921,22 @@
               </select>
             </span>
             <div class="set-hint">11 langues disponibles</div>
+          </div>
+          <div class="set-sep"></div>
+          <div class="set-field">
+            <label for="whisperModel">Modèle Whisper (transcription locale)</label>
+            <span class="select-wrap" style="width:280px">
+              <select id="whisperModel" class="opt-select" style="width:100%;background:var(--cream)">
+                <option value="">— défaut serveur —</option>
+                <option value="tiny">tiny (le plus rapide)</option>
+                <option value="base">base</option>
+                <option value="small">small</option>
+                <option value="medium">medium</option>
+                <option value="large-v3">large-v3 (le plus précis)</option>
+                <option value="large-v3-turbo">large-v3-turbo (rapide + précis)</option>
+              </select>
+            </span>
+            <div class="set-hint">Utilisé quand la vidéo n'a pas de sous-titres natifs</div>
           </div>
         </div>
         <div class="set-card models card">
