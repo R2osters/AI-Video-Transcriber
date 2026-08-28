@@ -748,6 +748,82 @@ async def process_upload_task(
         await broadcast_task_update(task_id, tasks[task_id])
 
 
+@app.post("/api/chat")
+async def chat_with_transcript(
+    task_id: str = Form(...),
+    question: str = Form(...),
+    history: str = Form(default="[]"),
+    api_key: str = Form(default=""),
+    model_base_url: str = Form(default=""),
+    model_id: str = Form(default=""),
+):
+    """基于已完成任务的转录文本回答问题。"""
+    task = tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if task.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="任务尚未完成")
+
+    transcript = task.get("script") or ""
+    if not transcript.strip():
+        raise HTTPException(status_code=400, detail="没有可用的转录文本")
+
+    question = (question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="问题不能为空")
+
+    # 组装客户端：前端凭据优先，否则用服务器全局配置
+    effective_key = (api_key or "").strip() or os.getenv("OPENAI_API_KEY", "")
+    effective_url = (model_base_url or "").strip().rstrip("/") or os.getenv("OPENAI_BASE_URL") or None
+    if not effective_key:
+        raise HTTPException(status_code=400, detail="API key is required")
+    model = (model_id or "").strip() or summarizer.fast_model
+
+    # 转录文本截断，避免超出上下文窗口
+    max_chars = int(os.getenv("CHAT_TRANSCRIPT_MAX_CHARS", "48000"))
+    excerpt = transcript[:max_chars]
+
+    try:
+        prior = json.loads(history or "[]")
+        if not isinstance(prior, list):
+            prior = []
+    except Exception:
+        prior = []
+
+    messages = [{
+        "role": "system",
+        "content": (
+            "You are a helpful assistant answering questions about a transcript. "
+            "Base your answers strictly on the transcript below. If the answer is not "
+            "in the transcript, say so. Answer in the language of the user's question.\n\n"
+            f"TRANSCRIPT (video: {task.get('video_title') or 'untitled'}):\n{excerpt}"
+        ),
+    }]
+    for m in prior[-10:]:
+        role = m.get("role")
+        content = (m.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content[:8000]})
+    messages.append({"role": "user", "content": question[:4000]})
+
+    def _ask():
+        client = openai.OpenAI(api_key=effective_key, base_url=effective_url)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.3,
+            max_tokens=1500,
+        )
+        return resp.choices[0].message.content
+
+    try:
+        answer = await asyncio.to_thread(_ask)
+        return {"answer": answer or ""}
+    except Exception as e:
+        logger.error(f"chat 调用失败: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+
+
 @app.get("/api/history")
 async def get_history(limit: int = 100):
     """已完成任务的紧凑列表（历史记录），按创建时间倒序。"""

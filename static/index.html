@@ -614,6 +614,41 @@
       margin: 10px 0;
     }
 
+    /* ── Chat ────────────────────────────────────────────── */
+    .chat-box { display: flex; flex-direction: column; gap: 12px; }
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 380px;
+      overflow-y: auto;
+      padding: 2px;
+    }
+    .chat-empty { font-size: 13px; color: var(--text-dim); text-align: center; padding: 18px 0; }
+    .chat-msg {
+      max-width: 85%;
+      padding: 9px 13px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      line-height: 1.6;
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      background: var(--accent-dim);
+      color: #f4e9dd;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-msg.assistant {
+      align-self: flex-start;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .chat-msg.assistant p:last-child { margin-bottom: 0; }
+    .chat-msg.pending { color: var(--text-dim); font-style: italic; }
+    .chat-input-row { display: flex; gap: 8px; }
+    .chat-input-row .s-input { flex: 1; }
+
     /* ── Footer ──────────────────────────────────────────── */
     .footer {
       text-align: center;
@@ -862,6 +897,9 @@
         <button class="tab-btn" data-tab="translation" id="translationTabBtn" style="display:none;">
           <span data-i18n="translation">Translation</span>
         </button>
+        <button class="tab-btn" data-tab="chat">
+          <span data-i18n="chat_tab">Chat</span>
+        </button>
       </div>
 
       <div id="scriptTab" class="tab-pane active">
@@ -872,6 +910,20 @@
       </div>
       <div id="translationTab" class="tab-pane">
         <div class="md-content" id="translationContent"></div>
+      </div>
+      <div id="chatTab" class="tab-pane">
+        <div class="chat-box">
+          <div class="chat-messages" id="chatMessages">
+            <div class="chat-empty" id="chatEmpty" data-i18n="chat_empty">Ask anything about this transcript.</div>
+          </div>
+          <div class="chat-input-row">
+            <input id="chatInput" class="s-input" type="text"
+                   placeholder="Ask a question…" data-i18n-placeholder="chat_placeholder">
+            <button id="chatSend" class="btn-go" style="padding:9px 16px;font-size:13px;">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 

@@ -66,6 +66,10 @@ class VideoTranscriber {
         record_stop:             'Stop',
         history:                 'History',
         history_empty:           'No completed transcriptions yet',
+        chat_tab:                'Chat',
+        chat_empty:              'Ask anything about this transcript.',
+        chat_placeholder:        'Ask a question…',
+        chat_error:              'Chat failed: ',
         error_mic_unsupported:   'Recording not supported in this browser',
         error_mic_denied:        'Microphone access denied',
         error_upload_type:       'Unsupported file type',
@@ -122,6 +126,10 @@ class VideoTranscriber {
         record_stop:             '停止',
         history:                 '历史记录',
         history_empty:           '暂无已完成的转录',
+        chat_tab:                '对话',
+        chat_empty:              '就这份转录内容随意提问。',
+        chat_placeholder:        '输入问题…',
+        chat_error:              '对话失败：',
         error_mic_unsupported:   '当前浏览器不支持录音',
         error_mic_denied:        '麦克风权限被拒绝',
         error_upload_type:       '不支持的文件类型',
@@ -177,6 +185,12 @@ class VideoTranscriber {
     this.uploadPickBtn      = document.getElementById('uploadPickBtn');
     this.fileInput          = document.getElementById('fileInput');
     this.uploadQueue        = document.getElementById('uploadQueue');
+    this.chatMessages       = document.getElementById('chatMessages');
+    this.chatEmpty          = document.getElementById('chatEmpty');
+    this.chatInput          = document.getElementById('chatInput');
+    this.chatSend           = document.getElementById('chatSend');
+    this._chatHistory       = [];
+    this._chatTaskId        = null;
     this.historyToggle      = document.getElementById('historyToggle');
     this.historyPanel       = document.getElementById('historyPanel');
     this.historyClose       = document.getElementById('historyClose');
@@ -213,6 +227,14 @@ class VideoTranscriber {
       const open = this.settingsBody.classList.toggle('open');
       this.settingsToggle.classList.toggle('open', open);
     });
+
+    // Chat
+    if (this.chatSend) {
+      this.chatSend.addEventListener('click', () => this._sendChat());
+      this.chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this._sendChat(); }
+      });
+    }
 
     // History
     if (this.historyToggle) {
@@ -450,6 +472,77 @@ class VideoTranscriber {
       this._showError(this.t('error_processing_failed') + err.message);
       this._setLoading(false);
       this._hideProgress();
+    }
+  }
+
+  /* ── Chat with transcript ─────────────────────────────── */
+  _resetChat(taskId) {
+    if (this._chatTaskId === taskId) return;
+    this._chatTaskId = taskId;
+    this._chatHistory = [];
+    if (this.chatMessages) {
+      this.chatMessages.innerHTML = '';
+      if (this.chatEmpty) {
+        this.chatMessages.appendChild(this.chatEmpty);
+        this.chatEmpty.style.display = '';
+      }
+    }
+  }
+
+  _appendChatMsg(role, content, pending = false) {
+    if (this.chatEmpty) this.chatEmpty.style.display = 'none';
+    const div = document.createElement('div');
+    div.className = `chat-msg ${role}${pending ? ' pending' : ''}`;
+    if (role === 'assistant' && !pending) div.innerHTML = marked.parse(content);
+    else div.textContent = content;
+    this.chatMessages.appendChild(div);
+    this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+    return div;
+  }
+
+  async _sendChat() {
+    const q = (this.chatInput.value || '').trim();
+    if (!q || !this.currentTaskId) return;
+    if (this.chatSend.disabled) return;
+
+    this.chatInput.value = '';
+    this.chatSend.disabled = true;
+    this._appendChatMsg('user', q);
+    const pendingEl = this._appendChatMsg('assistant', '…', true);
+
+    try {
+      const fd = new FormData();
+      fd.append('task_id',  this.currentTaskId);
+      fd.append('question', q);
+      fd.append('history',  JSON.stringify(this._chatHistory.slice(-10)));
+
+      const apiKey  = this.apiKeyInput.value.trim();
+      const baseUrl = this.modelBaseUrl.value.trim().replace(/\/$/, '');
+      const modelId = this.modelSelect.value;
+      if (apiKey)  fd.append('api_key',        apiKey);
+      if (baseUrl) fd.append('model_base_url', baseUrl);
+      if (modelId) fd.append('model_id',       modelId);
+
+      const resp = await fetch(`${this.apiBase}/chat`, { method: 'POST', body: fd });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(typeof err.detail === 'string' ? err.detail : `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      const answer = data.answer || '';
+
+      pendingEl.classList.remove('pending');
+      pendingEl.innerHTML = marked.parse(answer);
+      this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+
+      this._chatHistory.push({ role: 'user', content: q });
+      this._chatHistory.push({ role: 'assistant', content: answer });
+    } catch (e) {
+      pendingEl.classList.remove('pending');
+      pendingEl.textContent = this.t('chat_error') + e.message;
+    } finally {
+      this.chatSend.disabled = false;
+      this.chatInput.focus();
     }
   }
 
@@ -951,6 +1044,8 @@ class VideoTranscriber {
       this.translationTabBtn.style.display  = 'none';
       this.dlTranslation.style.display      = 'none';
     }
+
+    this._resetChat(this.currentTaskId);
 
     // SRT/VTT disponibles seulement en mode Whisper (segments horodatés)
     const hasSubs = Boolean(task.srt_filename);
