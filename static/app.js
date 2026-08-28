@@ -164,6 +164,10 @@ class VideoTranscriber {
     this.uploadZone         = document.getElementById('uploadZone');
     this.uploadPickBtn      = document.getElementById('uploadPickBtn');
     this.fileInput          = document.getElementById('fileInput');
+    this.uploadQueue        = document.getElementById('uploadQueue');
+    this._queue             = [];
+    this._queueBusy         = false;
+    this._taskDoneResolve   = null;
     this.uploadMaxMb        = 200;
     this._allowedUploadExts = new Set([
       '.txt',
@@ -223,9 +227,9 @@ class VideoTranscriber {
         this.fileInput.click();
       });
       this.fileInput.addEventListener('change', () => {
-        const f = this.fileInput.files && this.fileInput.files[0];
+        const files = Array.from(this.fileInput.files || []);
         this.fileInput.value = '';
-        if (f) this._startFileUpload(f);
+        if (files.length) this._enqueueFiles(files);
       });
       ['dragenter', 'dragover'].forEach((ev) => {
         this.uploadZone.addEventListener(ev, (e) => {
@@ -244,8 +248,8 @@ class VideoTranscriber {
         e.preventDefault();
         e.stopPropagation();
         this.uploadZone.classList.remove('dragover');
-        const f = e.dataTransfer.files && e.dataTransfer.files[0];
-        if (f) this._startFileUpload(f);
+        const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+        if (files.length) this._enqueueFiles(files);
       });
     }
   }
@@ -413,66 +417,130 @@ class VideoTranscriber {
     }
   }
 
-  async _startFileUpload(file) {
-    if (this.submitBtn.disabled) return;
-
+  /* ── Multi-file upload queue ──────────────────────────── */
+  _validateFile(file) {
     const parts = (file.name || '').split('.');
     const ext = parts.length > 1 ? ('.' + parts.pop().toLowerCase()) : '';
-    if (!this._allowedUploadExts.has(ext)) {
-      this._showError(this.t('error_upload_type'));
-      return;
-    }
-    if (!file.size) {
-      this._showError(this.t('error_upload_empty'));
-      return;
-    }
-    const maxB = this.uploadMaxMb * 1024 * 1024;
-    if (file.size > maxB) {
-      this._showError(this.t('error_upload_size')(this.uploadMaxMb));
-      return;
-    }
+    if (!this._allowedUploadExts.has(ext)) return this.t('error_upload_type');
+    if (!file.size)                        return this.t('error_upload_empty');
+    if (file.size > this.uploadMaxMb * 1024 * 1024) return this.t('error_upload_size')(this.uploadMaxMb);
+    return null;
+  }
 
-    this._setLoading(true);
-    this._hideError();
-    this._showProgress();
+  _enqueueFiles(files) {
+    for (const f of files) {
+      const err = this._validateFile(f);
+      this._queue.push({
+        file: f,
+        name: f.name || 'file',
+        status: err ? 'error' : 'pending',
+        err: err || null,
+      });
+    }
+    this._renderQueue();
+    this._pumpQueue();
+  }
 
-    const sumLang = this.summaryLangSel.value;
+  _renderQueue() {
+    if (!this.uploadQueue) return;
+    if (!this._queue.length) { this.uploadQueue.classList.remove('show'); this.uploadQueue.innerHTML = ''; return; }
+    this.uploadQueue.classList.add('show');
+    this.uploadQueue.innerHTML = '';
+    const icons = {
+      pending:    '<i class="fas fa-clock"></i>',
+      processing: '<span class="spinner" style="width:11px;height:11px;border-width:1.5px;"></span>',
+      done:       '<i class="fas fa-check"></i>',
+      error:      '<i class="fas fa-times"></i>',
+    };
+    for (const item of this._queue) {
+      const row = document.createElement('div');
+      row.className = `uq-row ${item.status}`;
+      const name = document.createElement('span');
+      name.className = 'uq-name';
+      name.textContent = item.name + (item.err ? ` — ${item.err}` : '');
+      const st = document.createElement('span');
+      st.className = 'uq-status';
+      st.innerHTML = icons[item.status] || '';
+      row.appendChild(name);
+      row.appendChild(st);
+      this.uploadQueue.appendChild(row);
+    }
+  }
+
+  async _pumpQueue() {
+    if (this._queueBusy) return;
+    this._queueBusy = true;
     try {
-      const fd = new FormData();
-      fd.append('file', file, file.name);
-      fd.append('summary_language', sumLang);
-
-      const apiKey  = this.apiKeyInput.value.trim();
-      const baseUrl = this.modelBaseUrl.value.trim().replace(/\/$/, '');
-      const modelId = this.modelSelect.value;
-      if (apiKey)  fd.append('api_key',       apiKey);
-      if (baseUrl) fd.append('model_base_url', baseUrl);
-      if (modelId) fd.append('model_id',       modelId);
-
-      const resp = await fetch(`${this.apiBase}/process-video`, { method: 'POST', body: fd });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        const d = err.detail;
-        const msg = typeof d === 'string'
-          ? d
-          : (Array.isArray(d) && d[0] && (d[0].msg || d[0].message))
-            || `HTTP ${resp.status}`;
-        throw new Error(msg);
+      for (;;) {
+        const item = this._queue.find(i => i.status === 'pending');
+        if (!item) break;
+        item.status = 'processing';
+        this._renderQueue();
+        try {
+          await this._uploadAndWait(item.file);
+          item.status = 'done';
+        } catch (err) {
+          item.status = 'error';
+          item.err = err.message || String(err);
+          this._showError(this.t('error_processing_failed') + item.err);
+        }
+        this._renderQueue();
       }
-
-      const data = await resp.json();
-      this.currentTaskId = data.task_id;
-
-      this._initSP();
-      this._updateProgress(5, this.t('preparing'), true);
-      this._startSSE();
-      this._saveSettings();
-
-    } catch (err) {
-      this._showError(this.t('error_processing_failed') + err.message);
+    } finally {
+      this._queueBusy = false;
       this._setLoading(false);
       this._hideProgress();
     }
+  }
+
+  /** Upload one file, resolve when its task completes (or reject on error). */
+  _uploadAndWait(file) {
+    return new Promise(async (resolve, reject) => {
+      this._setLoading(true);
+      this._hideError();
+      this._showProgress();
+
+      try {
+        const fd = new FormData();
+        fd.append('file', file, file.name);
+        fd.append('summary_language', this.summaryLangSel.value);
+
+        const apiKey  = this.apiKeyInput.value.trim();
+        const baseUrl = this.modelBaseUrl.value.trim().replace(/\/$/, '');
+        const modelId = this.modelSelect.value;
+        if (apiKey)  fd.append('api_key',        apiKey);
+        if (baseUrl) fd.append('model_base_url', baseUrl);
+        if (modelId) fd.append('model_id',       modelId);
+
+        const resp = await fetch(`${this.apiBase}/process-video`, { method: 'POST', body: fd });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          const d = err.detail;
+          const msg = typeof d === 'string'
+            ? d
+            : (Array.isArray(d) && d[0] && (d[0].msg || d[0].message))
+              || `HTTP ${resp.status}`;
+          throw new Error(msg);
+        }
+
+        const data = await resp.json();
+        this.currentTaskId = data.task_id;
+
+        this._taskDoneResolve = (status, errMsg) => {
+          this._taskDoneResolve = null;
+          if (status === 'completed') resolve();
+          else reject(new Error(errMsg || 'Processing error'));
+        };
+
+        this._initSP();
+        this._updateProgress(5, this.t('preparing'), true);
+        this._startSSE();
+        this._saveSettings();
+
+      } catch (err) {
+        reject(err);
+      }
+    });
   }
 
   /* ── SSE ──────────────────────────────────────────────── */
@@ -490,9 +558,11 @@ class VideoTranscriber {
         if (task.status === 'completed') {
           this._stopSP(); this._stopSSE(); this._setLoading(false); this._hideProgress();
           this._showResults(task);
+          if (this._taskDoneResolve) this._taskDoneResolve('completed');
         } else if (task.status === 'error') {
           this._stopSP(); this._stopSSE(); this._setLoading(false); this._hideProgress();
-          this._showError(task.error || 'Processing error');
+          if (this._taskDoneResolve) this._taskDoneResolve('error', task.error);
+          else this._showError(task.error || 'Processing error');
         }
       } catch (_) {}
     };
@@ -507,11 +577,13 @@ class VideoTranscriber {
             if (task?.status === 'completed') {
               this._stopSP(); this._setLoading(false); this._hideProgress();
               this._showResults(task);
+              if (this._taskDoneResolve) this._taskDoneResolve('completed');
               return;
             }
           }
         }
       } catch (_) {}
+      if (this._taskDoneResolve) { this._taskDoneResolve('error', 'SSE disconnected'); return; }
       this._showError(this.t('error_processing_failed') + 'SSE disconnected');
       this._setLoading(false);
     };
