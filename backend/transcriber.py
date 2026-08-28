@@ -11,9 +11,9 @@ class Transcriber:
     def __init__(self, model_size: str = "base"):
         """
         初始化转录器
-        
+
         Args:
-            model_size: Whisper模型大小 (tiny, base, small, medium, large)
+            model_size: Whisper模型大小 (tiny, base, small, medium, large-v3, large-v3-turbo/turbo)
         """
         self.model_size = model_size
         self.model = None
