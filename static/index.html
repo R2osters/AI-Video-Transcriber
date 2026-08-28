@@ -416,6 +416,56 @@
     .fetch-status.ok  { color: var(--success); }
     .fetch-status.err { color: var(--error); }
 
+    /* ── History panel ───────────────────────────────────── */
+    .history-panel {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      margin-top: 14px;
+      overflow: hidden;
+    }
+    .history-panel.show { display: block; }
+    .hp-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .hp-title { font-size: 13px; font-weight: 650; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+    .hp-close {
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; font-size: 13px; padding: 2px 6px;
+    }
+    .hp-close:hover { color: var(--text); }
+    .hp-list { max-height: 320px; overflow-y: auto; }
+    .hp-empty { padding: 20px; text-align: center; font-size: 13px; color: var(--text-dim); }
+    .hp-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background .15s;
+    }
+    .hp-row:last-child { border-bottom: none; }
+    .hp-row:hover { background: var(--surface-2); }
+    .hp-row .hp-info { flex: 1; min-width: 0; }
+    .hp-row .hp-name {
+      font-size: 13.5px; color: var(--text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .hp-row .hp-meta { font-size: 11.5px; color: var(--text-dim); }
+    .hp-row .hp-del {
+      background: none; border: none; color: var(--text-dim);
+      cursor: pointer; font-size: 12px; padding: 4px 6px; flex-shrink: 0;
+      border-radius: 5px;
+      transition: color .15s, background .15s;
+    }
+    .hp-row .hp-del:hover { color: var(--error); background: rgba(224,120,120,.08); }
+
     /* ── Result panel ────────────────────────────────────── */
     .result-panel {
       background: var(--surface);
@@ -607,10 +657,16 @@
     <img src="/static/sipsip.png" alt="sipsip logo">
     <span class="nav-logo-text">sipsip<em>.ai</em></span>
   </a>
-  <button id="langToggle" class="lang-btn">
-    <span id="langText">English</span>
-    <i class="fas fa-chevron-down" style="font-size:9px;"></i>
-  </button>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button id="historyToggle" class="lang-btn">
+      <i class="fas fa-clock-rotate-left" style="font-size:11px;"></i>
+      <span data-i18n="history">History</span>
+    </button>
+    <button id="langToggle" class="lang-btn">
+      <span id="langText">English</span>
+      <i class="fas fa-chevron-down" style="font-size:9px;"></i>
+    </button>
+  </div>
 </nav>
 
 <!-- Main -->
@@ -736,6 +792,15 @@
 
       </div>
     </div>
+  </div>
+
+  <!-- History panel -->
+  <div class="history-panel" id="historyPanel">
+    <div class="hp-head">
+      <span class="hp-title" data-i18n="history">History</span>
+      <button class="hp-close" id="historyClose"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="hp-list" id="historyList"></div>
   </div>
 
   <!-- Result panel -->

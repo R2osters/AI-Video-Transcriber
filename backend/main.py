@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 import aiofiles
@@ -437,6 +438,7 @@ async def _enqueue_upload_job(
         "summary": None,
         "error": None,
         "url": source_label,
+        "created_at": time.time(),
     }
     save_tasks(tasks)
 
@@ -507,7 +509,8 @@ async def process_video(
             "script": None,
             "summary": None,
             "error": None,
-            "url": url  # 保存URL用于去重
+            "url": url,  # 保存URL用于去重
+            "created_at": time.time(),
         }
         save_tasks(tasks)
         
@@ -743,6 +746,27 @@ async def process_upload_task(
         })
         save_tasks(tasks)
         await broadcast_task_update(task_id, tasks[task_id])
+
+
+@app.get("/api/history")
+async def get_history(limit: int = 100):
+    """已完成任务的紧凑列表（历史记录），按创建时间倒序。"""
+    items = []
+    for tid, t in tasks.items():
+        if t.get("status") != "completed":
+            continue
+        items.append({
+            "task_id": tid,
+            "video_title": t.get("video_title") or "(untitled)",
+            "url": t.get("url"),
+            "created_at": t.get("created_at"),
+            "detected_language": t.get("detected_language"),
+            "summary_language": t.get("summary_language"),
+            "has_translation": bool(t.get("translation")),
+            "has_subtitles": bool(t.get("srt_filename")),
+        })
+    items.sort(key=lambda x: x.get("created_at") or 0, reverse=True)
+    return {"items": items[:max(1, min(limit, 500))]}
 
 
 @app.get("/api/task-status/{task_id}")

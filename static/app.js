@@ -64,6 +64,8 @@ class VideoTranscriber {
         upload_files_btn:        'Upload files',
         record_btn:              'Record',
         record_stop:             'Stop',
+        history:                 'History',
+        history_empty:           'No completed transcriptions yet',
         error_mic_unsupported:   'Recording not supported in this browser',
         error_mic_denied:        'Microphone access denied',
         error_upload_type:       'Unsupported file type',
@@ -118,6 +120,8 @@ class VideoTranscriber {
         upload_files_btn:        '上传文件',
         record_btn:              '录音',
         record_stop:             '停止',
+        history:                 '历史记录',
+        history_empty:           '暂无已完成的转录',
         error_mic_unsupported:   '当前浏览器不支持录音',
         error_mic_denied:        '麦克风权限被拒绝',
         error_upload_type:       '不支持的文件类型',
@@ -173,6 +177,10 @@ class VideoTranscriber {
     this.uploadPickBtn      = document.getElementById('uploadPickBtn');
     this.fileInput          = document.getElementById('fileInput');
     this.uploadQueue        = document.getElementById('uploadQueue');
+    this.historyToggle      = document.getElementById('historyToggle');
+    this.historyPanel       = document.getElementById('historyPanel');
+    this.historyClose       = document.getElementById('historyClose');
+    this.historyList        = document.getElementById('historyList');
     this.recordBtn          = document.getElementById('recordBtn');
     this.recordIcon         = document.getElementById('recordIcon');
     this.recordLabel        = document.getElementById('recordLabel');
@@ -205,6 +213,12 @@ class VideoTranscriber {
       const open = this.settingsBody.classList.toggle('open');
       this.settingsToggle.classList.toggle('open', open);
     });
+
+    // History
+    if (this.historyToggle) {
+      this.historyToggle.addEventListener('click', () => this._toggleHistory());
+      this.historyClose.addEventListener('click', () => this.historyPanel.classList.remove('show'));
+    }
 
     // Fetch models
     this.fetchModelsBtn.addEventListener('click', () => this._fetchModels());
@@ -436,6 +450,85 @@ class VideoTranscriber {
       this._showError(this.t('error_processing_failed') + err.message);
       this._setLoading(false);
       this._hideProgress();
+    }
+  }
+
+  /* ── History ──────────────────────────────────────────── */
+  async _toggleHistory() {
+    const open = this.historyPanel.classList.toggle('show');
+    if (open) await this._loadHistory();
+  }
+
+  async _loadHistory() {
+    this.historyList.innerHTML = `<div class="hp-empty">…</div>`;
+    try {
+      const r = await fetch(`${this.apiBase}/history`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const items = data.items || [];
+      this.historyList.innerHTML = '';
+      if (!items.length) {
+        const d = document.createElement('div');
+        d.className = 'hp-empty';
+        d.textContent = this.t('history_empty');
+        this.historyList.appendChild(d);
+        return;
+      }
+      for (const it of items) {
+        const row = document.createElement('div');
+        row.className = 'hp-row';
+
+        const info = document.createElement('div');
+        info.className = 'hp-info';
+        const name = document.createElement('div');
+        name.className = 'hp-name';
+        name.textContent = it.video_title;
+        const meta = document.createElement('div');
+        meta.className = 'hp-meta';
+        const when = it.created_at ? new Date(it.created_at * 1000).toLocaleString() : '';
+        const src = (it.url || '').startsWith('upload:') ? '📁' : '🔗';
+        meta.textContent = `${src} ${when}${it.detected_language ? ' · ' + it.detected_language : ''}`;
+        info.appendChild(name);
+        info.appendChild(meta);
+
+        const del = document.createElement('button');
+        del.className = 'hp-del';
+        del.innerHTML = '<i class="fas fa-trash"></i>';
+        del.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            await fetch(`${this.apiBase}/task/${it.task_id}`, { method: 'DELETE' });
+          } catch (_) {}
+          this._loadHistory();
+        });
+
+        row.appendChild(info);
+        row.appendChild(del);
+        row.addEventListener('click', () => this._openHistoryItem(it.task_id));
+        this.historyList.appendChild(row);
+      }
+    } catch (e) {
+      this.historyList.innerHTML = '';
+      const d = document.createElement('div');
+      d.className = 'hp-empty';
+      d.textContent = this.t('error_processing_failed') + e.message;
+      this.historyList.appendChild(d);
+    }
+  }
+
+  async _openHistoryItem(taskId) {
+    try {
+      const r = await fetch(`${this.apiBase}/task-status/${taskId}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const task = await r.json();
+      if (task.status !== 'completed') return;
+      this.currentTaskId = taskId;
+      this.historyPanel.classList.remove('show');
+      this.emptyState.style.display = 'none';
+      this._hideProgress();
+      this._showResults(task);
+    } catch (e) {
+      this._showError(this.t('error_processing_failed') + e.message);
     }
   }
 
