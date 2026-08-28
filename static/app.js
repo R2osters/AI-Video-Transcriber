@@ -62,6 +62,10 @@ class VideoTranscriber {
         upload_or:               'or drop your files',
         upload_formats:          '.mp3 · .wav · .m4a · .aac · .opus · .flac · .ogg · .mp4 · .mov · .webm · .mkv · .avi',
         upload_files_btn:        'Upload files',
+        record_btn:              'Record',
+        record_stop:             'Stop',
+        error_mic_unsupported:   'Recording not supported in this browser',
+        error_mic_denied:        'Microphone access denied',
         error_upload_type:       'Unsupported file type',
         error_upload_empty:      'File is empty',
         error_upload_size:       (mb) => `File exceeds ${mb} MB limit`,
@@ -112,6 +116,10 @@ class VideoTranscriber {
         upload_or:               '或拖放文件到此处',
         upload_formats:          '.mp3 · .wav · .m4a · .aac · .opus · .flac · .ogg · .mp4 · .mov · .webm · .mkv · .avi',
         upload_files_btn:        '上传文件',
+        record_btn:              '录音',
+        record_stop:             '停止',
+        error_mic_unsupported:   '当前浏览器不支持录音',
+        error_mic_denied:        '麦克风权限被拒绝',
         error_upload_type:       '不支持的文件类型',
         error_upload_empty:      '文件为空',
         error_upload_size:       (mb) => `文件超过 ${mb} MB 限制`,
@@ -165,6 +173,14 @@ class VideoTranscriber {
     this.uploadPickBtn      = document.getElementById('uploadPickBtn');
     this.fileInput          = document.getElementById('fileInput');
     this.uploadQueue        = document.getElementById('uploadQueue');
+    this.recordBtn          = document.getElementById('recordBtn');
+    this.recordIcon         = document.getElementById('recordIcon');
+    this.recordLabel        = document.getElementById('recordLabel');
+    this.recordTimer        = document.getElementById('recordTimer');
+    this._recorder          = null;
+    this._recChunks         = [];
+    this._recTimerInterval  = null;
+    this._recStream         = null;
     this._queue             = [];
     this._queueBusy         = false;
     this._taskDoneResolve   = null;
@@ -244,6 +260,12 @@ class VideoTranscriber {
           this.uploadZone.classList.remove('dragover');
         }
       });
+      if (this.recordBtn) {
+        this.recordBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._toggleRecording();
+        });
+      }
       this.uploadZone.addEventListener('drop', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -414,6 +436,74 @@ class VideoTranscriber {
       this._showError(this.t('error_processing_failed') + err.message);
       this._setLoading(false);
       this._hideProgress();
+    }
+  }
+
+  /* ── Microphone recording ─────────────────────────────── */
+  async _toggleRecording() {
+    if (this._recorder && this._recorder.state === 'recording') {
+      this._recorder.stop();
+      return;
+    }
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      this._showError(this.t('error_mic_unsupported'));
+      return;
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (_) {
+      this._showError(this.t('error_mic_denied'));
+      return;
+    }
+
+    // Chrome/Firefox → webm/opus ; Safari → mp4 (.m4a)
+    const candidates = [
+      { mime: 'audio/webm;codecs=opus', ext: '.webm' },
+      { mime: 'audio/webm',             ext: '.webm' },
+      { mime: 'audio/mp4',              ext: '.m4a'  },
+    ];
+    const pick = candidates.find(c => MediaRecorder.isTypeSupported(c.mime)) || { mime: '', ext: '.webm' };
+
+    this._recChunks = [];
+    this._recStream = stream;
+    this._recorder = new MediaRecorder(stream, pick.mime ? { mimeType: pick.mime } : undefined);
+    this._recorder.addEventListener('dataavailable', (e) => {
+      if (e.data && e.data.size) this._recChunks.push(e.data);
+    });
+    this._recorder.addEventListener('stop', () => {
+      this._setRecordingUI(false);
+      stream.getTracks().forEach(t => t.stop());
+      this._recStream = null;
+      const blob = new Blob(this._recChunks, { type: pick.mime || 'audio/webm' });
+      this._recChunks = [];
+      this._recorder = null;
+      if (!blob.size) { this._showError(this.t('error_upload_empty')); return; }
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const file = new File([blob], `recording_${stamp}${pick.ext}`, { type: blob.type });
+      this._enqueueFiles([file]);
+    });
+
+    this._recorder.start();
+    this._setRecordingUI(true);
+  }
+
+  _setRecordingUI(on) {
+    if (!this.recordBtn) return;
+    this.recordBtn.classList.toggle('recording', on);
+    this.recordIcon.className = on ? 'fas fa-stop' : 'fas fa-microphone';
+    this.recordLabel.textContent = on ? this.t('record_stop') : this.t('record_btn');
+    this.recordTimer.style.display = on ? 'inline' : 'none';
+    if (on) {
+      const t0 = Date.now();
+      this.recordTimer.textContent = '0:00';
+      this._recTimerInterval = setInterval(() => {
+        const s = Math.floor((Date.now() - t0) / 1000);
+        this.recordTimer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      }, 500);
+    } else if (this._recTimerInterval) {
+      clearInterval(this._recTimerInterval);
+      this._recTimerInterval = null;
     }
   }
 

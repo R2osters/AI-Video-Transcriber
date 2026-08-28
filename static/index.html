@@ -223,6 +223,23 @@
       pointer-events: none;
     }
 
+    /* ── Record button ───────────────────────────────────── */
+    .btn-record { margin-left: 8px; }
+    .btn-record.recording {
+      border-color: var(--error);
+      color: var(--error);
+      animation: rec-pulse 1.6s ease-in-out infinite;
+    }
+    .record-timer {
+      font-variant-numeric: tabular-nums;
+      font-size: 12.5px;
+      color: var(--error);
+    }
+    @keyframes rec-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(224,120,120,.25); }
+      50%       { box-shadow: 0 0 0 5px rgba(224,120,120,.08); }
+    }
+
     /* ── Upload queue ────────────────────────────────────── */
     .upload-queue { margin-top: 8px; display: none; }
     .upload-queue.show { display: block; }
@@ -635,6 +652,11 @@
       <button type="button" class="btn-upload-pill" id="uploadPickBtn">
         <i class="fas fa-upload"></i>
         <span data-i18n="upload_files_btn">Upload files</span>
+      </button>
+      <button type="button" class="btn-upload-pill btn-record" id="recordBtn">
+        <i class="fas fa-microphone" id="recordIcon"></i>
+        <span id="recordLabel" data-i18n="record_btn">Record</span>
+        <span id="recordTimer" class="record-timer" style="display:none;">0:00</span>
       </button>
     </div>
     <input type="file" id="fileInput" accept=".txt,.mp3,.m4a,.wav,.ogg,.flac,.aac,.opus,.wma,.aiff,.mp4,.webm,.mkv,.mov,.avi" multiple hidden>
