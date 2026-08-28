@@ -13,7 +13,7 @@ An AI-powered tool to transcribe and summarize videos and podcasts — paste a U
 ## ✨ Features
 
 - 🎥 **Multi-Platform Support**: Works with YouTube, TikTok, Bilibili, Apple Podcasts, SoundCloud, and 30+ more
-- 📁 **Local File Upload**: Drag-and-drop or pick a file — supported formats include `.txt` (treated as transcript text), `.mp3`, `.mp4`, `.m4a`, `.wav`, `.webm`, `.mkv`, `.ogg`, `.flac`. Media is normalized with FFmpeg for Whisper; the same optimize → translate → summarize pipeline runs as for URLs
+- 📁 **Local File Upload**: Drag-and-drop or pick a file — supported formats include `.txt` (treated as transcript text), audio (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.aac`, `.opus`, `.wma`, `.aiff`) and video (`.mp4`, `.webm`, `.mkv`, `.mov`, `.avi`). Media is normalized with FFmpeg for Whisper; the same optimize → translate → summarize pipeline runs as for URLs
 - ⚡ **Subtitle-First Architecture**: For platforms with native subtitles (e.g. YouTube), transcripts are extracted instantly — no audio download needed. Whisper is only used as a fallback, making the whole pipeline dramatically faster.
 - 🗣️ **Intelligent Transcription**: High-accuracy speech-to-text using Faster-Whisper when subtitles aren't available
 - 🤖 **AI Text Optimization**: Automatic typo correction, sentence completion, and intelligent paragraphing
@@ -211,7 +211,7 @@ A: Transcription speed depends on video length, Whisper model size, and hardware
 A: All platforms supported by yt-dlp, including but not limited to: YouTube, TikTok, Facebook, Instagram, Twitter, Bilibili, Youku, iQiyi, Tencent Video, etc.
 
 ### Q: What local file types and size limits apply?
-A: Allowed extensions include `.txt`, `.mp3`, `.mp4`, `.m4a`, `.wav`, `.webm`, `.mkv`, `.ogg`, `.flac`. Default max size is **200 MB** per file; override with the `UPLOAD_MAX_MB` environment variable on the server.
+A: Allowed extensions include `.txt`, audio (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.aac`, `.opus`, `.wma`, `.aiff`) and video (`.mp4`, `.webm`, `.mkv`, `.mov`, `.avi`). Default max size is **200 MB** per file; override with the `UPLOAD_MAX_MB` environment variable on the server.
 
 ### Q: What if the AI optimization features are unavailable?
 A: AI features require an API key from any OpenAI-compatible provider (OpenAI, OpenRouter, etc.). You can enter it directly in the **AI Settings** panel in the UI — no server restart needed. Alternatively, set `OPENAI_API_KEY` as an environment variable for a server-side default.
