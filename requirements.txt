@@ -6,3 +6,7 @@ faster-whisper>=1.1.0
 openai>=1.51.0
 pydantic>=2.7.0
 aiofiles>=24.1.0
+
+# Optional — speaker diarization (heavy: pulls torch). Enable with
+# ENABLE_DIARIZATION=1 + HF_TOKEN after installing:
+# pyannote.audio>=3.1

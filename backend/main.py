@@ -18,6 +18,7 @@ from video_processor import VideoProcessor
 from transcriber import Transcriber
 from summarizer import Summarizer
 from translator import Translator
+from diarizer import Diarizer
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +50,7 @@ video_processor = VideoProcessor()
 transcriber = Transcriber()
 summarizer = Summarizer()
 translator = Translator()
+diarizer = Diarizer()
 
 # 存储任务状态 - 使用文件持久化
 import threading
@@ -166,6 +168,46 @@ def _segments_to_vtt(segments: list) -> str:
         lines.append(text)
         lines.append("")
     return "\n".join(lines)
+
+
+def _rebuild_transcript_with_speakers(raw_script: str, segments: list) -> str:
+    """用带说话人标签的分段重建 Markdown 正文，保留原头部（语言信息）。"""
+    marker = "## Transcription Content"
+    idx = raw_script.find(marker)
+    head = raw_script[: idx + len(marker)] if idx != -1 else raw_script
+    lines = [head, ""]
+    for seg in segments:
+        start = transcriber._format_time(seg["start"])
+        end = transcriber._format_time(seg["end"])
+        speaker = seg.get("speaker")
+        prefix = f"**{speaker}:** " if speaker else ""
+        lines.append(f"**[{start} - {end}]**")
+        lines.append("")
+        lines.append(f"{prefix}{seg['text']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+async def _maybe_diarize(task_id: str, audio_path: str, segments, raw_script: str):
+    """启用时执行说话人分离；返回（可能更新的）segments 与 raw_script。"""
+    if not diarizer.enabled or not segments:
+        return segments, raw_script
+    try:
+        tasks[task_id].update({
+            "progress": 48,
+            "message": "正在识别说话人...",
+        })
+        save_tasks(tasks)
+        await broadcast_task_update(task_id, tasks[task_id])
+
+        turns = await diarizer.diarize(audio_path)
+        if turns:
+            segments = Diarizer.assign_speakers(segments, turns)
+            raw_script = _rebuild_transcript_with_speakers(raw_script, segments)
+            logger.info(f"说话人分离完成: {len(turns)} 个语音段")
+    except Exception as e:
+        logger.warning(f"说话人分离失败，继续无标签流程: {e}")
+    return segments, raw_script
 
 
 def _txt_to_raw_transcript_markdown(body: str) -> str:
@@ -605,6 +647,9 @@ async def process_video_task(
 
             raw_script = await transcriber.transcribe(audio_path)
             whisper_segments = list(transcriber.last_segments)
+            whisper_segments, raw_script = await _maybe_diarize(
+                task_id, audio_path, whisper_segments, raw_script
+            )
 
         await _run_post_extract_pipeline(
             task_id=task_id,
@@ -720,6 +765,9 @@ async def process_upload_task(
 
             raw_script = await transcriber.transcribe(audio_path)
             whisper_segments = list(transcriber.last_segments)
+            whisper_segments, raw_script = await _maybe_diarize(
+                task_id, audio_path, whisper_segments, raw_script
+            )
 
         await _run_post_extract_pipeline(
             task_id=task_id,
