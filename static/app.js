@@ -60,7 +60,7 @@ class VideoTranscriber {
         models_loaded:           (n) => `${n} models loaded`,
         models_error:            'Failed to fetch models',
         upload_or:               'or drop your files',
-        upload_formats:          '.mp3 · .mp4 · .wav · .m4a · .webm · .mkv · .ogg · .flac',
+        upload_formats:          '.mp3 · .wav · .m4a · .aac · .opus · .flac · .ogg · .mp4 · .mov · .webm · .mkv · .avi',
         upload_files_btn:        'Upload files',
         error_upload_type:       'Unsupported file type',
         error_upload_empty:      'File is empty',
@@ -110,7 +110,7 @@ class VideoTranscriber {
         models_loaded:           (n) => `已加载 ${n} 个模型`,
         models_error:            '获取模型失败',
         upload_or:               '或拖放文件到此处',
-        upload_formats:          '.mp3 · .mp4 · .wav · .m4a · .webm · .mkv · .ogg · .flac',
+        upload_formats:          '.mp3 · .wav · .m4a · .aac · .opus · .flac · .ogg · .mp4 · .mov · .webm · .mkv · .avi',
         upload_files_btn:        '上传文件',
         error_upload_type:       '不支持的文件类型',
         error_upload_empty:      '文件为空',
@@ -163,7 +163,11 @@ class VideoTranscriber {
     this.uploadPickBtn      = document.getElementById('uploadPickBtn');
     this.fileInput          = document.getElementById('fileInput');
     this.uploadMaxMb        = 200;
-    this._allowedUploadExts = new Set(['.txt', '.mp3', '.mp4', '.m4a', '.wav', '.webm', '.mkv', '.ogg', '.flac']);
+    this._allowedUploadExts = new Set([
+      '.txt',
+      '.mp3', '.m4a', '.wav', '.ogg', '.flac', '.aac', '.opus', '.wma', '.aiff',
+      '.mp4', '.webm', '.mkv', '.mov', '.avi',
+    ]);
   }
 
   /* ── Events ───────────────────────────────────────────── */

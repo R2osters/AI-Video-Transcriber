@@ -105,7 +105,13 @@ active_tasks = {}
 sse_connections = {}
 
 # 本地上传：允许的类型与大小上限（MB），可用环境变量 UPLOAD_MAX_MB 调整
-UPLOAD_ALLOWED_EXT = frozenset({".txt", ".mp3", ".mp4", ".m4a", ".wav", ".webm", ".mkv", ".ogg", ".flac"})
+UPLOAD_ALLOWED_EXT = frozenset({
+    ".txt",
+    # audio
+    ".mp3", ".m4a", ".wav", ".ogg", ".flac", ".aac", ".opus", ".wma", ".aiff",
+    # vidéo
+    ".mp4", ".webm", ".mkv", ".mov", ".avi",
+})
 UPLOAD_MAX_MB = int(os.getenv("UPLOAD_MAX_MB", "200"))
 
 
