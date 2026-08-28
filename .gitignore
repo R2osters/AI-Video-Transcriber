@@ -68,3 +68,5 @@ models/
 
 # Claude Code local config
 .claude/
+.claude-flow/
+dict
