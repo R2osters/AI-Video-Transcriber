@@ -21,6 +21,12 @@ An AI-powered tool to transcribe and summarize videos and podcasts — paste a U
 - 🔧 **Bring Your Own Model**: Configure any OpenAI-compatible API endpoint (OpenAI, OpenRouter, local LLM, etc.) directly in the UI — enter your API Base URL and API Key, then click **Fetch** to auto-discover all available models and select the one you want
 - ⚙️ **Conditional Translation**: Auto-translates the transcript when the summary language differs from the source language
 - 📱 **Mobile-Friendly**: Perfect support for mobile devices
+- 📚 **Batch Uploads**: Drop several files at once — they queue up and are transcribed one after another with per-file status
+- 🎤 **Microphone Recording**: Record directly in the browser (voice notes, meetings) and send the capture straight to transcription
+- 💬 **Chat with the Transcript**: Ask questions about any completed transcription; answers are grounded in the transcript via your configured model
+- 🕘 **History**: Completed transcriptions are persisted — reopen, re-download, or delete them from the History panel
+- 📝 **SRT/VTT Export**: When Whisper runs, timestamped `.srt` and `.vtt` subtitle files are generated for use in video editors and players
+- 👥 **Speaker Diarization (optional)**: Label segments with `Speaker 1/2/…` via pyannote-audio — enable with `ENABLE_DIARIZATION=1` + `HF_TOKEN` after `pip install pyannote.audio`
 
 [![Star History Chart](https://api.star-history.com/svg?repos=wendy7756/AI-Video-Transcriber&type=Date)](https://star-history.com/#wendy7756/AI-Video-Transcriber&Date)
 
