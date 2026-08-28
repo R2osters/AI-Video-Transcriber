@@ -30,6 +30,8 @@ class VideoTranscriber {
         model_select:            'Model',
         model_default:           '— use server default —',
         summary_language:        'Summary Language',
+        audio_language:          'Audio Language',
+        audio_lang_auto:         'Auto-detect',
         processing_progress:     'Processing',
         preparing:               'Preparing…',
         transcript_text:         'Transcript',
@@ -90,6 +92,8 @@ class VideoTranscriber {
         model_select:            '模型',
         model_default:           '— 使用服务器默认 —',
         summary_language:        '摘要语言',
+        audio_language:          '音频语言',
+        audio_lang_auto:         '自动检测',
         processing_progress:     '处理进度',
         preparing:               '准备中…',
         transcript_text:         '转录文本',
@@ -150,6 +154,7 @@ class VideoTranscriber {
     this.videoUrlInput      = document.getElementById('videoUrl');
     this.submitBtn          = document.getElementById('submitBtn');
     this.summaryLangSel     = document.getElementById('summaryLanguage');
+    this.audioLangSel       = document.getElementById('audioLanguage');
     this.langToggle         = document.getElementById('langToggle');
     this.langText           = document.getElementById('langText');
     this.errorBanner        = document.getElementById('errorBanner');
@@ -253,7 +258,7 @@ class VideoTranscriber {
     this.apiKeyInput.addEventListener('input', debouncedFetch);
 
     // Persist settings
-    [this.modelBaseUrl, this.apiKeyInput, this.modelSelect, this.summaryLangSel].forEach(el => {
+    [this.modelBaseUrl, this.apiKeyInput, this.modelSelect, this.summaryLangSel, this.audioLangSel].forEach(el => {
       el.addEventListener('change', () => this._saveSettings());
     });
 
@@ -342,6 +347,7 @@ class VideoTranscriber {
       apiKey:   this.apiKeyInput.value,
       model:    this.modelSelect.value,
       summaryLang: this.summaryLangSel.value,
+      audioLang:   this.audioLangSel ? this.audioLangSel.value : '',
     };
     try { localStorage.setItem('vt_settings', JSON.stringify(s)); } catch (_) {}
   }
@@ -354,6 +360,7 @@ class VideoTranscriber {
       if (s.baseUrl)     this.modelBaseUrl.value = s.baseUrl;
       if (s.apiKey)      this.apiKeyInput.value  = s.apiKey;
       if (s.summaryLang) this.summaryLangSel.value = s.summaryLang;
+      if (s.audioLang && this.audioLangSel) this.audioLangSel.value = s.audioLang;
       // Model options will be restored after fetching
       this._savedModel = s.model || '';
 
@@ -446,6 +453,8 @@ class VideoTranscriber {
       const fd = new FormData();
       fd.append('url',              url);
       fd.append('summary_language', sumLang);
+      const audioLang = this.audioLangSel ? this.audioLangSel.value : '';
+      if (audioLang) fd.append('audio_language', audioLang);
 
       const apiKey  = this.apiKeyInput.value.trim();
       const baseUrl = this.modelBaseUrl.value.trim().replace(/\/$/, '');
@@ -780,6 +789,8 @@ class VideoTranscriber {
         const fd = new FormData();
         fd.append('file', file, file.name);
         fd.append('summary_language', this.summaryLangSel.value);
+        const audioLang = this.audioLangSel ? this.audioLangSel.value : '';
+        if (audioLang) fd.append('audio_language', audioLang);
 
         const apiKey  = this.apiKeyInput.value.trim();
         const baseUrl = this.modelBaseUrl.value.trim().replace(/\/$/, '');

@@ -426,6 +426,7 @@ async def _enqueue_upload_job(
     api_key: str,
     model_base_url: str,
     model_id: str,
+    audio_language: str = "",
 ) -> dict:
     """保存上传文件并入队 process_upload_task，返回 {task_id, message}。"""
     raw_name = file.filename or "upload.bin"
@@ -495,11 +496,20 @@ async def _enqueue_upload_job(
             api_key,
             model_base_url,
             model_id,
+            audio_language,
         )
     )
     active_tasks[task_id] = bg
 
     return {"task_id": task_id, "message": "任务已创建，正在处理中..."}
+
+
+def _sanitize_audio_language(code: str) -> str:
+    """校验用户指定的音频语言代码；空或 auto 表示自动检测。"""
+    code = (code or "").strip().lower()
+    if not code or code == "auto":
+        return ""
+    return code if re.fullmatch(r"[a-z]{2,3}", code) else ""
 
 
 @app.post("/api/process-video")
@@ -509,6 +519,7 @@ async def process_video(
     api_key: str = Form(default=""),
     model_base_url: str = Form(default=""),
     model_id: str = Form(default=""),
+    audio_language: str = Form(default=""),
     file: Optional[UploadFile] = File(None),
 ):
     """
@@ -516,9 +527,11 @@ async def process_video(
     上传与 URL 共用此路径，便于反向代理只放行 /api/process-video 的环境。
     """
     try:
+        audio_language = _sanitize_audio_language(audio_language)
+
         if file is not None and (file.filename or "").strip():
             return await _enqueue_upload_job(
-                file, summary_language, api_key, model_base_url, model_id
+                file, summary_language, api_key, model_base_url, model_id, audio_language
             )
 
         stripped = (url or "").strip()
@@ -557,7 +570,7 @@ async def process_video(
         save_tasks(tasks)
         
         # 创建并跟踪异步任务
-        task = asyncio.create_task(process_video_task(task_id, url, summary_language, api_key, model_base_url, model_id))
+        task = asyncio.create_task(process_video_task(task_id, url, summary_language, api_key, model_base_url, model_id, audio_language))
         active_tasks[task_id] = task
         
         return {"task_id": task_id, "message": "任务已创建，正在处理中..."}
@@ -575,6 +588,7 @@ async def process_video_task(
     api_key: str = "",
     model_base_url: str = "",
     model_id: str = "",
+    audio_language: str = "",
 ):
     """
     异步处理视频任务
@@ -645,7 +659,7 @@ async def process_video_task(
             save_tasks(tasks)
             await broadcast_task_update(task_id, tasks[task_id])
 
-            raw_script = await transcriber.transcribe(audio_path)
+            raw_script = await transcriber.transcribe(audio_path, language=audio_language or None)
             whisper_segments = list(transcriber.last_segments)
             whisper_segments, raw_script = await _maybe_diarize(
                 task_id, audio_path, whisper_segments, raw_script
@@ -692,10 +706,12 @@ async def process_upload(
     api_key: str = Form(default=""),
     model_base_url: str = Form(default=""),
     model_id: str = Form(default=""),
+    audio_language: str = Form(default=""),
 ):
     """独立上传入口；逻辑与 multipart 带 file 的 /api/process-video 相同。"""
     return await _enqueue_upload_job(
-        file, summary_language, api_key, model_base_url, model_id
+        file, summary_language, api_key, model_base_url, model_id,
+        _sanitize_audio_language(audio_language)
     )
 
 
@@ -709,6 +725,7 @@ async def process_upload_task(
     api_key: str = "",
     model_base_url: str = "",
     model_id: str = "",
+    audio_language: str = "",
 ):
     source_ref = f"upload:{original_name}"
     try:
@@ -763,7 +780,7 @@ async def process_upload_task(
             save_tasks(tasks)
             await broadcast_task_update(task_id, tasks[task_id])
 
-            raw_script = await transcriber.transcribe(audio_path)
+            raw_script = await transcriber.transcribe(audio_path, language=audio_language or None)
             whisper_segments = list(transcriber.last_segments)
             whisper_segments, raw_script = await _maybe_diarize(
                 task_id, audio_path, whisper_segments, raw_script
