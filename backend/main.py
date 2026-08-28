@@ -127,6 +127,46 @@ def _sanitize_title_for_filename(title: str) -> str:
     return safe[:80] or "untitled"
 
 
+def _format_ts(seconds: float, sep: str) -> str:
+    """秒 → HH:MM:SS,mmm（SRT）或 HH:MM:SS.mmm（VTT）。"""
+    ms = int(round(seconds * 1000))
+    h, rem = divmod(ms, 3600000)
+    m, rem = divmod(rem, 60000)
+    s, ms = divmod(rem, 1000)
+    return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
+
+
+def _segments_to_srt(segments: list) -> str:
+    lines = []
+    for i, seg in enumerate(segments, 1):
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        speaker = seg.get("speaker")
+        if speaker:
+            text = f"{speaker}: {text}"
+        lines.append(str(i))
+        lines.append(f"{_format_ts(seg['start'], ',')} --> {_format_ts(seg['end'], ',')}")
+        lines.append(text)
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _segments_to_vtt(segments: list) -> str:
+    lines = ["WEBVTT", ""]
+    for seg in segments:
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        speaker = seg.get("speaker")
+        if speaker:
+            text = f"<v {speaker}>{text}"
+        lines.append(f"{_format_ts(seg['start'], '.')} --> {_format_ts(seg['end'], '.')}")
+        lines.append(text)
+        lines.append("")
+    return "\n".join(lines)
+
+
 def _txt_to_raw_transcript_markdown(body: str) -> str:
     """将纯文本包装为与 Whisper 输出结构一致的 Markdown。"""
     text = body.strip() if body.strip() else "(empty)"
@@ -153,10 +193,26 @@ async def _run_post_extract_pipeline(
     api_key: str = "",
     model_base_url: str = "",
     model_id: str = "",
+    segments: Optional[list] = None,
 ) -> None:
     """取得 raw_script 后的共用管线：归档、优化、翻译、摘要、广播。"""
     short_id = task_id.replace("-", "")[:6]
     safe_title = _sanitize_title_for_filename(video_title)
+
+    # 有 Whisper 分段时导出 SRT/VTT 字幕文件
+    if segments:
+        try:
+            srt_filename = f"subtitles_{safe_title}_{short_id}.srt"
+            vtt_filename = f"subtitles_{safe_title}_{short_id}.vtt"
+            (TEMP_DIR / srt_filename).write_text(_segments_to_srt(segments), encoding="utf-8")
+            (TEMP_DIR / vtt_filename).write_text(_segments_to_vtt(segments), encoding="utf-8")
+            tasks[task_id].update({
+                "srt_filename": srt_filename,
+                "vtt_filename": vtt_filename,
+            })
+            save_tasks(tasks)
+        except Exception as e:
+            logger.error(f"生成SRT/VTT失败: {e}")
 
     try:
         raw_md_filename = f"raw_{safe_title}_{short_id}.md"
@@ -503,6 +559,7 @@ async def process_video_task(
 
         subtitle_text, sub_title, sub_lang = await video_processor.fetch_subtitles(url, TEMP_DIR)
 
+        whisper_segments = None
         if subtitle_text:
             # ── 快速路径：有字幕，跳过音频下载和 Whisper ──────────────────
             video_title = sub_title
@@ -544,6 +601,7 @@ async def process_video_task(
             await broadcast_task_update(task_id, tasks[task_id])
 
             raw_script = await transcriber.transcribe(audio_path)
+            whisper_segments = list(transcriber.last_segments)
 
         await _run_post_extract_pipeline(
             task_id=task_id,
@@ -556,6 +614,7 @@ async def process_video_task(
             api_key=api_key,
             model_base_url=model_base_url,
             model_id=model_id,
+            segments=whisper_segments,
         )
 
         # 不要立即删除临时文件！保留给用户下载
@@ -618,6 +677,7 @@ async def process_upload_task(
         else:
             request_summarizer = summarizer
 
+        whisper_segments = None
         if ext_lower == ".txt":
             tasks[task_id].update({
                 "progress": 20,
@@ -656,6 +716,7 @@ async def process_upload_task(
             await broadcast_task_update(task_id, tasks[task_id])
 
             raw_script = await transcriber.transcribe(audio_path)
+            whisper_segments = list(transcriber.last_segments)
 
         await _run_post_extract_pipeline(
             task_id=task_id,
@@ -668,6 +729,7 @@ async def process_upload_task(
             api_key=api_key,
             model_base_url=model_base_url,
             model_id=model_id,
+            segments=whisper_segments,
         )
 
     except Exception as e:
@@ -761,21 +823,23 @@ async def download_file(filename: str):
     """
     try:
         # 检查文件扩展名安全性
-        if not filename.endswith('.md'):
-            raise HTTPException(status_code=400, detail="仅支持下载.md文件")
-        
+        allowed = {".md": "text/markdown", ".srt": "application/x-subrip", ".vtt": "text/vtt"}
+        ext = Path(filename).suffix.lower()
+        if ext not in allowed:
+            raise HTTPException(status_code=400, detail="仅支持下载 .md/.srt/.vtt 文件")
+
         # 检查文件名格式（防止路径遍历攻击）
         if '..' in filename or '/' in filename or '\\' in filename:
             raise HTTPException(status_code=400, detail="文件名格式无效")
-            
+
         file_path = TEMP_DIR / filename
         if not file_path.exists():
             raise HTTPException(status_code=404, detail="文件不存在")
-            
+
         return FileResponse(
             file_path,
             filename=filename,
-            media_type="text/markdown"
+            media_type=allowed[ext]
         )
     except HTTPException:
         raise

@@ -147,6 +147,8 @@ class VideoTranscriber {
     this.dlScript           = document.getElementById('downloadScript');
     this.dlTranslation      = document.getElementById('downloadTranslation');
     this.dlSummary          = document.getElementById('downloadSummary');
+    this.dlSrt              = document.getElementById('downloadSrt');
+    this.dlVtt              = document.getElementById('downloadVtt');
     this.translationTabBtn  = document.getElementById('translationTabBtn');
     this.tabBtns            = document.querySelectorAll('.tab-btn');
     this.tabPanes           = document.querySelectorAll('.tab-pane');
@@ -208,6 +210,8 @@ class VideoTranscriber {
     this.dlScript.addEventListener('click',      () => this._downloadFile('script'));
     this.dlTranslation.addEventListener('click', () => this._downloadFile('translation'));
     this.dlSummary.addEventListener('click',     () => this._downloadFile('summary'));
+    if (this.dlSrt) this.dlSrt.addEventListener('click', () => this._downloadFile('srt'));
+    if (this.dlVtt) this.dlVtt.addEventListener('click', () => this._downloadFile('vtt'));
 
     if (this.uploadPickBtn && this.fileInput && this.uploadZone) {
       this.uploadPickBtn.addEventListener('click', (e) => {
@@ -485,7 +489,7 @@ class VideoTranscriber {
 
         if (task.status === 'completed') {
           this._stopSP(); this._stopSSE(); this._setLoading(false); this._hideProgress();
-          this._showResults(task.script, task.summary, task.video_title, task.translation, task.detected_language, task.summary_language);
+          this._showResults(task);
         } else if (task.status === 'error') {
           this._stopSP(); this._stopSSE(); this._setLoading(false); this._hideProgress();
           this._showError(task.error || 'Processing error');
@@ -502,7 +506,7 @@ class VideoTranscriber {
             const task = await r.json();
             if (task?.status === 'completed') {
               this._stopSP(); this._setLoading(false); this._hideProgress();
-              this._showResults(task.script, task.summary, task.video_title, task.translation, task.detected_language, task.summary_language);
+              this._showResults(task);
               return;
             }
           }
@@ -675,7 +679,9 @@ class VideoTranscriber {
     return c;
   }
 
-  _showResults(script, summary, videoTitle, translation, detectedLang, summaryLang) {
+  _showResults(task) {
+    const { script, summary, translation, detected_language: detectedLang, summary_language: summaryLang } = task;
+    this._lastTask = task;
     this.scriptContent.innerHTML  = script    ? marked.parse(script)      : '';
     this.summaryContent.innerHTML = summary   ? marked.parse(summary)     : '';
 
@@ -690,6 +696,11 @@ class VideoTranscriber {
       this.translationTabBtn.style.display  = 'none';
       this.dlTranslation.style.display      = 'none';
     }
+
+    // SRT/VTT disponibles seulement en mode Whisper (segments horodatés)
+    const hasSubs = Boolean(task.srt_filename);
+    if (this.dlSrt) this.dlSrt.style.display = hasSubs ? 'inline-flex' : 'none';
+    if (this.dlVtt) this.dlVtt.style.display = hasSubs ? 'inline-flex' : 'none';
 
     this.resultsPanel.classList.add('show');
     this._switchTab('script');
@@ -716,7 +727,10 @@ class VideoTranscriber {
       if      (type === 'script')      filename = task.script_path      ? task.script_path.split('/').pop()      : `transcript_${task.safe_title||'x'}_${task.short_id||'x'}.md`;
       else if (type === 'summary')     filename = task.summary_path     ? task.summary_path.split('/').pop()     : `summary_${task.safe_title||'x'}_${task.short_id||'x'}.md`;
       else if (type === 'translation') filename = task.translation_path ? task.translation_path.split('/').pop() : `translation_${task.safe_title||'x'}_${task.short_id||'x'}.md`;
+      else if (type === 'srt')         filename = task.srt_filename;
+      else if (type === 'vtt')         filename = task.vtt_filename;
       else throw new Error('Unknown type');
+      if (!filename) throw new Error(this.t('error_no_download'));
 
       const a = document.createElement('a');
       a.href = `${this.apiBase}/download/${encodeURIComponent(filename)}`;
