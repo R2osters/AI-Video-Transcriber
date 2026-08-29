@@ -78,3 +78,6 @@ desktop/dist-backend/
 desktop/dist-installer/
 desktop/resources/bin/
 desktop/*.spec.bak
+# desktop/build contient l'icône (exception au build/ global)
+!desktop/build/
+!desktop/build/**
