@@ -119,7 +119,28 @@ class Transcriber:
         except Exception as e:
             logger.error(f"转录失败: {str(e)}")
             raise Exception(f"转录失败: {str(e)}")
-    
+
+    async def transcribe_plain(self, audio_path: str, language: Optional[str] = None) -> str:
+        """
+        轻量转录：直接返回纯文本（无 Markdown/时间戳）。
+        供实时本地转录使用 — beam_size=1 换速度。
+        """
+        self._load_model()
+        import asyncio
+
+        def _run():
+            segments, _info = self.model.transcribe(
+                audio_path,
+                language=language,
+                beam_size=1,
+                vad_filter=True,
+                no_speech_threshold=0.7,
+                condition_on_previous_text=False,
+            )
+            return " ".join(s.text.strip() for s in segments).strip()
+
+        return await asyncio.to_thread(_run)
+
     def _format_time(self, seconds: float) -> str:
         """
         将秒数转换为时分秒格式

@@ -1207,54 +1207,75 @@ Rules:
             备用摘要文本
         """
         language_name = self.language_map.get(target_language, "中文（简体）")
-        
-        # 简单的文本处理，提取关键信息
+
+        # 提取正文（去掉标题/时间戳/元信息行）
         lines = transcript.split('\n')
-        content_lines = [line for line in lines if line.strip() and not line.startswith('#') and not line.startswith('**')]
-        
-        # 计算大概的长度
-        total_chars = sum(len(line) for line in content_lines)
-        
-        # 使用目标语言的标签
+        content_lines = [line.strip() for line in lines
+                         if line.strip() and not line.startswith('#') and not line.startswith('**')]
+        body = " ".join(content_lines)
+        total_chars = len(body)
+
         meta_labels = self._get_summary_labels(target_language)
         fallback_labels = self._get_fallback_labels(target_language)
-        
-        # 直接使用视频标题作为主标题  
         title = video_title if video_title else "Summary"
-        
+
+        key_sentences = self._extractive_key_sentences(body, max_sentences=8)
+        bullets = "\n".join(f"- {s}" for s in key_sentences) if key_sentences else f"- {fallback_labels['content_description']}"
+
         summary = f"""# {title}
 
 **{meta_labels['language_label']}:** {language_name}
 **{fallback_labels['notice']}:** {fallback_labels['api_unavailable']}
 
+## {fallback_labels['main_content']}
 
+{bullets}
 
 ## {fallback_labels['overview_title']}
 
 **{fallback_labels['content_length']}:** {fallback_labels['about']} {total_chars} {fallback_labels['characters']}
 **{fallback_labels['paragraph_count']}:** {len(content_lines)} {fallback_labels['paragraphs']}
 
-## {fallback_labels['main_content']}
+<p style="color: #888; font-style: italic; margin-top: 16px;"><em>{fallback_labels['fallback_disclaimer']}</em></p>"""
 
-{fallback_labels['content_description']}
-
-{fallback_labels['suggestions_intro']}
-
-1. {fallback_labels['suggestion_1']}
-2. {fallback_labels['suggestion_2']}
-3. {fallback_labels['suggestion_3']}
-
-## {fallback_labels['recommendations']}
-
-- {fallback_labels['recommendation_1']}
-- {fallback_labels['recommendation_2']}
-
-
-<br/>
-
-<p style="color: #888; font-style: italic; text-align: center; margin-top: 16px;"><em>{fallback_labels['fallback_disclaimer']}</em></p>"""
-        
         return summary
+
+    def _extractive_key_sentences(self, text: str, max_sentences: int = 8) -> list:
+        """
+        无 API 时的抽取式摘要：按词频给句子打分，取分数最高的句子并按原文顺序输出。
+        语言无关（\\w 匹配 Unicode 词，包括 CJK 单字）。
+        """
+        import re as _re
+
+        # 切句：西文标点 + CJK 标点
+        sentences = [s.strip() for s in _re.split(r"(?<=[.!?。！？])\s+|\n+", text) if len(s.strip()) >= 20]
+        if len(sentences) <= max_sentences:
+            return sentences
+
+        # 词频（忽略 1 字符词与纯数字）
+        freq = {}
+        for s in sentences:
+            for w in _re.findall(r"\w+", s.lower()):
+                if len(w) > 1 and not w.isdigit():
+                    freq[w] = freq.get(w, 0) + 1
+        if not freq:
+            return sentences[:max_sentences]
+        max_f = max(freq.values())
+
+        scored = []
+        for i, s in enumerate(sentences):
+            words = [w for w in _re.findall(r"\w+", s.lower()) if len(w) > 1]
+            if not words:
+                continue
+            # 归一化词频均值；长度惩罚避免超长句霸榜
+            score = sum(freq.get(w, 0) / max_f for w in words) / len(words)
+            if len(s) > 300:
+                score *= 0.7
+            scored.append((score, i, s))
+
+        top = sorted(scored, key=lambda x: -x[0])[:max_sentences]
+        top.sort(key=lambda x: x[1])  # 按出现顺序还原
+        return [s for _, _, s in top]
     
     def _get_current_time(self) -> str:
         """获取当前时间字符串"""

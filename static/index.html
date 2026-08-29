@@ -585,6 +585,30 @@
     .live-text .live-delta { color: var(--muted); font-style: italic; }
     .live-actions { display: flex; gap: 10px; margin-top: 12px; }
     .live-actions .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Outils sidebar / queue / chat ──────────────────── */
+    .tool-item { width: 100%; text-align: left; }
+    .tool-item:hover { color: var(--ink); }
+    .queue-note {
+      margin-top: 10px; font-size: 12px; color: var(--warm-gray);
+      font-family: var(--mono);
+    }
+    .btn-live.recording { border-color: rgba(220,60,40,.55); color: #B3341F; }
+    .chat-card { margin-top: 14px; padding: 14px; }
+    .chat-log {
+      display: flex; flex-direction: column; gap: 8px;
+      max-height: 260px; overflow-y: auto; margin: 10px 0;
+    }
+    .chat-msg {
+      font-size: 13px; line-height: 1.55; padding: 8px 11px;
+      border-radius: 10px; white-space: pre-wrap; word-break: break-word;
+    }
+    .chat-msg.q { background: var(--night); color: var(--cream); align-self: flex-end; max-width: 90%; }
+    .chat-msg.a { background: var(--sand); color: var(--ink-body); align-self: flex-start; max-width: 95%; }
+    .chat-msg.a.thinking { color: var(--muted); font-style: italic; }
+    .chat-row { display: flex; gap: 8px; }
+    .chat-row .set-input { flex: 1; min-width: 0; }
+    .chat-hint { margin-top: 8px; font-size: 10.5px; color: var(--faint); }
   </style>
 </head>
 <body>
@@ -616,11 +640,11 @@
       </button>
     </nav>
     <div class="soon">
-      <div class="soon-label">BIENTÔT</div>
-      <div class="soon-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/><path d="M17 3v6M14 6h6"/></svg>Import multiple</div>
-      <div class="soon-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>Enregistrement micro</div>
-      <div class="soon-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.5 3.5 0 010 7M21 20c0-2.8-1.9-5.1-4.5-5.8"/></svg>Locuteurs</div>
-      <div class="soon-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12a8 8 0 01-8 8H4l2-3a8 8 0 1115-5z"/></svg>Chat sur transcription</div>
+      <div class="soon-label">OUTILS</div>
+      <button class="soon-item tool-item" id="toolMulti"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/><path d="M17 3v6M14 6h6"/></svg>Import multiple</button>
+      <button class="soon-item tool-item" id="toolRecord"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>Enregistrement micro</button>
+      <button class="soon-item tool-item" id="toolSpeakers"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.5 3.5 0 010 7M21 20c0-2.8-1.9-5.1-4.5-5.8"/></svg>Locuteurs</button>
+      <button class="soon-item tool-item" id="toolChat"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12a8 8 0 01-8 8H4l2-3a8 8 0 1115-5z"/></svg>Chat sur transcription</button>
     </div>
   </aside>
 
@@ -658,17 +682,27 @@
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#5C574F" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 8l5-5 5 5"/><path d="M12 3v12"/></svg>
           </div>
           <div class="dropzone-title" id="dropTitle">Déposez un fichier ici</div>
-          <div class="dropzone-hint" id="dropHint">mp4 · mkv · webm · mp3 · wav · m4a · ogg · flac · txt — 200 Mo max</div>
-          <input type="file" id="fileInput" hidden accept=".txt,.mp3,.mp4,.m4a,.wav,.webm,.mkv,.ogg,.flac">
+          <div class="dropzone-hint" id="dropHint">plusieurs fichiers acceptés — mp4 · mkv · webm · mov · avi · mp3 · wav · m4a · ogg · flac · aac · opus · txt — 200 Mo max</div>
+          <input type="file" id="fileInput" hidden multiple accept=".txt,.mp3,.mp4,.m4a,.wav,.webm,.mkv,.ogg,.flac,.aac,.opus,.wma,.aiff,.mov,.avi">
         </div>
+        <div class="queue-note" id="queueNote" hidden></div>
 
-        <!-- Micro live : streaming vers l'API Realtime OpenAI via le proxy backend -->
+        <!-- Micro : live (local par défaut, OpenAI si clé) + enregistrement classique -->
         <div class="live-row">
           <button type="button" class="btn-live" id="liveBtn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0"/><path d="M12 19v3"/></svg>
             <span id="liveBtnLabel">Micro live</span>
           </button>
-          <span class="live-hint">Transcription en direct — nécessite une clé API OpenAI (Paramètres)</span>
+          <button type="button" class="btn-live" id="recordBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+            <span id="recordBtnLabel">Enregistrer</span>
+          </button>
+          <span class="select-wrap">
+            <select id="liveMode" class="opt-select" style="font-size:11.5px;padding:6px 26px 6px 10px">
+              <option value="local">Local — sans clé (faster-whisper)</option>
+              <option value="openai">OpenAI Realtime — clé requise</option>
+            </select>
+          </span>
         </div>
         <div class="live-panel" id="livePanel" hidden>
           <div class="live-head">
@@ -800,6 +834,8 @@
           <div class="res-meta" id="resMeta">—</div>
         </div>
         <div class="res-actions">
+          <button class="btn-secondary" id="srtBtn" style="display:none">SRT</button>
+          <button class="btn-secondary" id="vttBtn" style="display:none">VTT</button>
           <button class="btn-secondary" id="copyBtn">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
             Copier
@@ -838,6 +874,15 @@
             <div class="kv"><span class="k">Modèle</span><span class="v" id="kvModel">—</span></div>
             <div class="kv"><span class="k">Mots</span><span class="v" id="kvWords">—</span></div>
             <div class="kv"><span class="k">Durée totale</span><span class="v" id="kvDuration">—</span></div>
+          </div>
+          <div class="chat-card card" id="chatCard">
+            <div class="label">CHAT SUR TRANSCRIPTION</div>
+            <div class="chat-log" id="chatLog"></div>
+            <form class="chat-row" id="chatForm">
+              <input type="text" id="chatInput" class="set-input" placeholder="Posez une question sur ce transcript…" autocomplete="off">
+              <button type="submit" class="btn-primary" id="chatSend">→</button>
+            </form>
+            <div class="chat-hint">Sans clé API : recherche locale dans le transcript. Avec clé : réponses IA.</div>
           </div>
         </div>
       </div>

@@ -1025,6 +1025,44 @@ async def process_upload_task(
         await broadcast_task_update(task_id, tasks[task_id])
 
 
+def _local_chat_answer(transcript: str, question: str, top_k: int = 4) -> str:
+    """
+    无 LLM 的本地问答回退：按问题词项与句子的重叠度打分，
+    返回最相关的转录片段（按原文顺序）。
+    """
+    # 去掉 Markdown 头部与时间戳行，仅保留正文
+    body_lines = [l.strip() for l in transcript.split("\n")
+                  if l.strip() and not l.startswith("#") and not l.startswith("**")]
+    sentences = []
+    for line in body_lines:
+        sentences.extend(s.strip() for s in re.split(r"(?<=[.!?。！？])\s+", line) if len(s.strip()) >= 15)
+    if not sentences:
+        return "Transcript vide — rien à chercher. / 转录为空。"
+
+    q_terms = {w for w in re.findall(r"\w+", question.lower()) if len(w) > 1}
+    if not q_terms:
+        return "Question trop courte pour une recherche locale."
+
+    scored = []
+    for i, s in enumerate(sentences):
+        s_terms = {w for w in re.findall(r"\w+", s.lower()) if len(w) > 1}
+        if not s_terms:
+            continue
+        overlap = len(q_terms & s_terms)
+        if overlap:
+            scored.append((overlap / len(q_terms), i, s))
+
+    if not scored:
+        return ("Aucun passage du transcript ne correspond à la question "
+                "(recherche locale sans IA — ajoutez une clé API dans Paramètres pour des réponses générées).")
+
+    top = sorted(scored, key=lambda x: -x[0])[:top_k]
+    top.sort(key=lambda x: x[1])
+    excerpts = "\n\n".join(f"> {s}" for _, _, s in top)
+    return (f"**Passages du transcript les plus pertinents** (mode local, sans clé API) :\n\n{excerpts}\n\n"
+            "*Pour des réponses rédigées par IA, renseignez une clé API dans Paramètres.*")
+
+
 @app.post("/api/chat")
 async def chat_with_transcript(
     task_id: str = Form(...),
@@ -1053,7 +1091,8 @@ async def chat_with_transcript(
     effective_key = (api_key or "").strip() or os.getenv("OPENAI_API_KEY", "")
     effective_url = (model_base_url or "").strip().rstrip("/") or os.getenv("OPENAI_BASE_URL") or None
     if not effective_key:
-        raise HTTPException(status_code=400, detail="API key is required")
+        # 无 API Key：本地检索回退 — 返回与问题最相关的转录片段
+        return {"answer": _local_chat_answer(transcript, question), "local": True}
     model = (model_id or "").strip() or summarizer.fast_model
 
     # 转录文本截断，避免超出上下文窗口
@@ -1408,6 +1447,123 @@ async def live_transcribe(ws: WebSocket):
                 await oai.close()
             except Exception:
                 pass
+        try:
+            await ws.close()
+        except Exception:
+            pass
+
+
+# ── 实时转录（本地，无需 API Key）：faster-whisper 周期性转录累积音频 ────────
+LIVE_LOCAL_SAMPLE_RATE = 24000          # 与前端 pcm-worklet 输出一致
+LIVE_LOCAL_BYTES_PER_SEC = LIVE_LOCAL_SAMPLE_RATE * 2  # PCM16 mono
+LIVE_LOCAL_MAX_SECONDS = 600            # 10 min 上限
+LIVE_LOCAL_PASS_MIN_NEW_SECONDS = 3.0   # 每次至少累积 3 秒新音频才重新转录
+
+
+def _write_pcm16_wav(path: Path, pcm: bytes, sample_rate: int = LIVE_LOCAL_SAMPLE_RATE) -> None:
+    import wave
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm)
+
+
+@app.websocket("/ws/live-local")
+async def live_local_transcribe(ws: WebSocket):
+    """
+    实时转录（本地 faster-whisper，无需任何 API Key）。协议与 /ws/live-transcribe 一致：
+      客户端 → {"type":"start","whisper_model"?,"language"?}
+               {"type":"audio","audio":"<base64 pcm16 24kHz mono>"}
+               {"type":"stop"}
+      服务端 → {"type":"ready"} / {"type":"partial","text"}（全文替换式刷新）
+               {"type":"utterance","text"}（最终结果）/ {"type":"error","message"}
+    说明：整段缓冲重转录，间隔自适应（至少 3 秒新音频且上一轮已结束）。
+    """
+    import base64
+
+    await ws.accept()
+    session_id = uuid.uuid4().hex[:12]
+    wav_path = TEMP_DIR / f"live_local_{session_id}.wav"
+    buf = bytearray()
+    state = {"busy": False, "last_len": 0}
+
+    try:
+        try:
+            cfg = json.loads(await asyncio.wait_for(ws.receive_text(), timeout=15))
+        except (asyncio.TimeoutError, json.JSONDecodeError):
+            await ws.send_json({"type": "error", "message": "Expected start message"})
+            return
+        if cfg.get("type") != "start":
+            await ws.send_json({"type": "error", "message": "Expected start message"})
+            return
+
+        req_transcriber = get_transcriber(cfg.get("whisper_model") or "")
+        language = _sanitize_audio_language(cfg.get("language") or "") or None
+        max_bytes = LIVE_LOCAL_MAX_SECONDS * LIVE_LOCAL_BYTES_PER_SEC
+        await ws.send_json({"type": "ready"})
+
+        async def run_pass(final: bool) -> None:
+            if state["busy"]:
+                return
+            state["busy"] = True
+            try:
+                data = bytes(buf)
+                state["last_len"] = len(data)
+                if len(data) < int(0.5 * LIVE_LOCAL_BYTES_PER_SEC):
+                    return
+                _write_pcm16_wav(wav_path, data)
+                text = await req_transcriber.transcribe_plain(str(wav_path), language=language)
+                if final:
+                    await ws.send_json({"type": "utterance", "text": text})
+                elif text:
+                    await ws.send_json({"type": "partial", "text": text})
+            except Exception as e:
+                logger.warning(f"本地实时转录批次失败: {e}")
+                if final:
+                    await ws.send_json({"type": "error", "message": str(e)})
+            finally:
+                state["busy"] = False
+
+        pending: set = set()
+        while True:
+            data = json.loads(await ws.receive_text())
+            mtype = data.get("type")
+            if mtype == "audio" and data.get("audio"):
+                try:
+                    buf.extend(base64.b64decode(data["audio"]))
+                except Exception:
+                    continue
+                if len(buf) > max_bytes:
+                    await ws.send_json({"type": "error", "message": f"Session over {LIVE_LOCAL_MAX_SECONDS//60} min limit"})
+                    break
+                new_bytes = len(buf) - state["last_len"]
+                if not state["busy"] and new_bytes >= LIVE_LOCAL_PASS_MIN_NEW_SECONDS * LIVE_LOCAL_BYTES_PER_SEC:
+                    t = asyncio.create_task(run_pass(final=False))
+                    pending.add(t)
+                    t.add_done_callback(pending.discard)
+            elif mtype == "stop":
+                break
+
+        # 等上一轮结束后做最终完整转录
+        while state["busy"]:
+            await asyncio.sleep(0.1)
+        state["last_len"] = -1  # 强制最终轮
+        await run_pass(final=True)
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error(f"本地实时转录会话失败: {e}")
+        try:
+            await ws.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass
+    finally:
+        try:
+            wav_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         try:
             await ws.close()
         except Exception:

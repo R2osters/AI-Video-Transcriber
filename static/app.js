@@ -36,6 +36,10 @@ class App {
     this.selectedModel = '';
     this._live = null;          // session micro live en cours
     this._lastLiveTranscript = '';
+    this._rec = null;           // MediaRecorder en cours
+    this.queue = [];            // fichiers en attente (import multiple)
+    this._processingQueue = false;
+    this.chatHistory = [];      // [{role, content}] pour le chat courant
 
     /* Progression simulée entre deux événements serveur */
     this.sp = { current: 0, target: 15, stage: 'preparing', interval: null };
@@ -76,9 +80,9 @@ class App {
     zone.addEventListener('click', () => fileInput.click());
     zone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
     fileInput.addEventListener('change', () => {
-      const f = fileInput.files && fileInput.files[0];
+      const files = Array.from(fileInput.files || []);
       fileInput.value = '';
-      if (f) this._startFile(f);
+      if (files.length) this._enqueueFiles(files);
     });
     ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, (e) => {
       e.preventDefault(); zone.classList.add('dragover');
@@ -89,8 +93,8 @@ class App {
     });
     zone.addEventListener('drop', (e) => {
       e.preventDefault(); zone.classList.remove('dragover');
-      const f = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (f) this._startFile(f);
+      const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+      if (files.length) this._enqueueFiles(files);
     });
 
     /* Progression */
@@ -154,12 +158,33 @@ class App {
     $('keepVideo').addEventListener('change', () => this._saveSettings());
     $('whisperModel').addEventListener('change', () => this._saveSettings());
 
-    /* Micro live */
+    /* Micro live + enregistrement */
     $('liveBtn').addEventListener('click', () => {
       if (this._live) this._stopLive(); else this._startLive();
     });
     $('liveStopBtn').addEventListener('click', () => this._stopLive());
     $('liveUseBtn').addEventListener('click', () => this._useLiveTranscript());
+    $('recordBtn').addEventListener('click', () => this._toggleRecord());
+    $('liveMode').addEventListener('change', () => this._saveSettings());
+
+    /* Outils (sidebar) */
+    $('toolMulti').addEventListener('click', () => { this.showView('new'); $('fileInput').click(); });
+    $('toolRecord').addEventListener('click', () => { this.showView('new'); this._toggleRecord(); });
+    $('toolSpeakers').addEventListener('click', () => {
+      this.showView('settings');
+      this._toast('Locuteurs : à activer côté serveur — ENABLE_DIARIZATION=1 + HF_TOKEN (voir README). Les segments seront alors étiquetés Speaker 1/2/…');
+    });
+    $('toolChat').addEventListener('click', () => {
+      if (this.result) { this.showView('results', { navKey: 'history' }); $('chatInput').focus(); }
+      else this._toast('Terminez (ou rouvrez) d’abord une transcription pour discuter avec elle');
+    });
+
+    /* Chat */
+    $('chatForm').addEventListener('submit', (e) => { e.preventDefault(); this._sendChat(); });
+
+    /* SRT / VTT */
+    $('srtBtn').addEventListener('click', () => this._downloadSub('srt'));
+    $('vttBtn').addEventListener('click', () => this._downloadSub('vtt'));
 
     window.addEventListener('beforeunload', () => { this._stopSSE(); if (this._live) this._stopLive(); });
   }
@@ -174,6 +199,7 @@ class App {
       summaryLang: $('summaryLanguage').value,
       keepVideo: $('keepVideo').checked,
       whisperModel: $('whisperModel').value,
+      liveMode: $('liveMode').value,
     };
     try { localStorage.setItem('vt_settings', JSON.stringify(s)); } catch (_) {}
   }
@@ -187,6 +213,7 @@ class App {
     if (s.summaryLang) { $('summaryLanguage').value = s.summaryLang; $('defaultLang').value = s.summaryLang; }
     if (typeof s.keepVideo === 'boolean') $('keepVideo').checked = s.keepVideo;
     if (s.whisperModel) $('whisperModel').value = s.whisperModel;
+    if (s.liveMode) $('liveMode').value = s.liveMode;
     if (Array.isArray(s.models) && s.models.length) {
       this.models = s.models;
       this.selectedModel = s.model || '';
@@ -309,12 +336,13 @@ class App {
   }
 
   async _startFile(file) {
-    const allowed = new Set(['.txt', '.mp3', '.mp4', '.m4a', '.wav', '.webm', '.mkv', '.ogg', '.flac']);
+    const allowed = new Set(['.txt', '.mp3', '.mp4', '.m4a', '.wav', '.webm', '.mkv', '.ogg', '.flac',
+      '.aac', '.opus', '.wma', '.aiff', '.mov', '.avi']);
     const parts = (file.name || '').split('.');
     const ext = parts.length > 1 ? ('.' + parts.pop().toLowerCase()) : '';
-    if (!allowed.has(ext)) { this._toast('Type de fichier non pris en charge'); return; }
-    if (!file.size) { this._toast('Fichier vide'); return; }
-    if (file.size > 200 * 1024 * 1024) { this._toast('Fichier au-delà de 200 Mo'); return; }
+    if (!allowed.has(ext)) { this._toast(`Type non pris en charge : ${file.name}`); this._queueContinue(); return; }
+    if (!file.size) { this._toast(`Fichier vide : ${file.name}`); this._queueContinue(); return; }
+    if (file.size > 200 * 1024 * 1024) { this._toast(`Au-delà de 200 Mo : ${file.name}`); this._queueContinue(); return; }
 
     const fd = new FormData();
     fd.append('file', file, file.name);
@@ -334,11 +362,152 @@ class App {
     if (whisperM) fd.append('whisper_model', whisperM);
   }
 
+  /* ── Import multiple (file d'attente) ─────────────────── */
+  _enqueueFiles(files) {
+    const arr = Array.from(files || []);
+    if (!arr.length) return;
+    this.queue.push(...arr);
+    this._updateQueueNote();
+    if (!this._processingQueue) this._nextInQueue();
+  }
+
+  _nextInQueue() {
+    const f = this.queue.shift();
+    this._updateQueueNote();
+    if (!f) { this._processingQueue = false; return; }
+    this._processingQueue = true;
+    this._startFile(f);
+  }
+
+  _queueContinue() {
+    if (this.queue.length) {
+      this._toast(`Fichier suivant de la file (${this.queue.length} restant${this.queue.length > 1 ? 's' : ''})…`);
+      setTimeout(() => this._nextInQueue(), 600);
+    } else {
+      this._processingQueue = false;
+      this._updateQueueNote();
+    }
+  }
+
+  _updateQueueNote() {
+    const el = $('queueNote');
+    if (!el) return;
+    if (this.queue.length) {
+      el.hidden = false;
+      el.textContent = `File d'attente : ${this.queue.length} fichier${this.queue.length > 1 ? 's' : ''} en attente`;
+    } else {
+      el.hidden = true;
+      el.textContent = '';
+    }
+  }
+
+  /* ── Enregistrement micro (local, sans clé) ───────────── */
+  async _toggleRecord() {
+    if (this._rec) { try { this._rec.recorder.stop(); } catch (_) {} return; }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    } catch (e) {
+      this._toast('Accès au micro refusé : ' + e.message);
+      return;
+    }
+    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+      : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '');
+    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    const chunks = [];
+    const startAt = Date.now();
+    const rec = { recorder, stream, timer: null };
+    this._rec = rec;
+
+    recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => {
+      clearInterval(rec.timer);
+      stream.getTracks().forEach(t => t.stop());
+      this._rec = null;
+      $('recordBtn').classList.remove('recording');
+      $('recordBtnLabel').textContent = 'Enregistrer';
+      if (!chunks.length) { this._toast('Enregistrement vide'); return; }
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-');
+      const file = new File(chunks, `enregistrement-${stamp}.webm`, { type: mime || 'audio/webm' });
+      this._enqueueFiles([file]);
+    };
+
+    recorder.start(500);
+    $('recordBtn').classList.add('recording');
+    const fmt = (ms) => {
+      const s = Math.floor(ms / 1000);
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    };
+    rec.timer = setInterval(() => {
+      $('recordBtnLabel').textContent = `Arrêter (${fmt(Date.now() - startAt)})`;
+    }, 500);
+    $('recordBtnLabel').textContent = 'Arrêter (0:00)';
+  }
+
+  /* ── Chat sur transcription ───────────────────────────── */
+  async _sendChat() {
+    const input = $('chatInput');
+    const q = input.value.trim();
+    if (!q) return;
+    if (!this.result || !this.result.id) { this._toast('Aucune transcription active'); return; }
+    input.value = '';
+
+    const log = $('chatLog');
+    const addMsg = (cls, text) => {
+      const div = document.createElement('div');
+      div.className = `chat-msg ${cls}`;
+      div.textContent = text;
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+      return div;
+    };
+    addMsg('q', q);
+    const pending = addMsg('a thinking', 'Recherche…');
+
+    try {
+      const fd = new FormData();
+      fd.append('task_id', this.result.id);
+      fd.append('question', q);
+      fd.append('history', JSON.stringify(this.chatHistory.slice(-10)));
+      const apiKey = $('apiKeyInput').value.trim();
+      const baseUrl = $('modelBaseUrl').value.trim().replace(/\/$/, '');
+      if (apiKey) fd.append('api_key', apiKey);
+      if (baseUrl) fd.append('model_base_url', baseUrl);
+      if (this.selectedModel) fd.append('model_id', this.selectedModel);
+
+      const resp = await fetch(`${API}/chat`, { method: 'POST', body: fd });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(typeof err.detail === 'string' ? err.detail : `HTTP ${resp.status}`);
+      }
+      const data = await resp.json();
+      pending.className = 'chat-msg a';
+      pending.textContent = data.answer || '(réponse vide)';
+      this.chatHistory.push({ role: 'user', content: q }, { role: 'assistant', content: data.answer || '' });
+    } catch (e) {
+      pending.className = 'chat-msg a';
+      pending.textContent = 'Erreur : ' + e.message +
+        (e.message.includes('404') || e.message.includes('存在') ? ' (transcription absente du serveur — relancez-la)' : '');
+    }
+  }
+
+  _downloadSub(kind) {
+    const file = this.result && this.result[kind];
+    if (!file) return;
+    const a = document.createElement('a');
+    a.href = `${API}/download/${encodeURIComponent(file)}`;
+    a.download = file;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
   /* ── Micro live (transcription temps réel) ────────────── */
   async _startLive() {
+    const mode = $('liveMode').value === 'openai' ? 'openai' : 'local';
     const apiKey = $('apiKeyInput').value.trim();
-    if (!apiKey) {
-      this._toast('Renseignez d’abord votre clé API OpenAI dans Paramètres (l’API Realtime nécessite OpenAI)');
+    if (mode === 'openai' && !apiKey) {
+      this._toast('Le mode OpenAI Realtime nécessite une clé API OpenAI (Paramètres) — ou passez en mode Local, gratuit et sans clé');
       return;
     }
 
@@ -352,13 +521,13 @@ class App {
       return;
     }
 
-    const live = { stream, ctx: null, node: null, ws: null, ready: false, utterances: [], delta: '' };
+    const live = { mode, stream, ctx: null, node: null, ws: null, ready: false, utterances: [], delta: '', partial: '', stopping: false };
     this._live = live;
     $('livePanel').hidden = false;
     $('livePanel').classList.remove('stopped');
     $('liveText').textContent = '';
     $('liveUseBtn').disabled = true;
-    $('liveStatus').textContent = 'Connexion…';
+    $('liveStatus').textContent = mode === 'local' ? 'Connexion… (local, sans clé)' : 'Connexion… (OpenAI Realtime)';
     $('liveBtn').classList.add('recording');
     $('liveBtnLabel').textContent = 'Arrêter';
 
@@ -372,10 +541,16 @@ class App {
       src.connect(node); // pas de connexion à destination → pas d'écho
 
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${proto}://${location.host}/ws/live-transcribe`);
+      const wsPath = mode === 'openai' ? '/ws/live-transcribe' : '/ws/live-local';
+      const ws = new WebSocket(`${proto}://${location.host}${wsPath}`);
       live.ws = ws;
 
-      ws.onopen = () => ws.send(JSON.stringify({ type: 'start', api_key: apiKey }));
+      ws.onopen = () => {
+        const start = mode === 'openai'
+          ? { type: 'start', api_key: apiKey }
+          : { type: 'start', whisper_model: $('whisperModel').value };
+        ws.send(JSON.stringify(start));
+      };
       node.port.onmessage = (e) => {
         if (live.ready && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'audio', audio: this._i16ToB64(e.data) }));
@@ -386,49 +561,90 @@ class App {
         try { msg = JSON.parse(e.data); } catch (_) { return; }
         if (msg.type === 'ready') {
           live.ready = true;
-          $('liveStatus').textContent = 'À l’écoute…';
+          $('liveStatus').textContent = mode === 'local'
+            ? 'À l’écoute… (transcription locale, rafraîchie toutes les ~3 s)'
+            : 'À l’écoute…';
         } else if (msg.type === 'delta') {
           live.delta += msg.text || '';
           this._renderLive(live);
+        } else if (msg.type === 'partial') {
+          // mode local : le serveur renvoie le texte complet à chaque passe
+          live.partial = (msg.text || '').trim();
+          this._renderLive(live);
         } else if (msg.type === 'utterance') {
           const text = (msg.text || '').trim();
-          live.delta = '';
-          if (text) live.utterances.push(text);
-          this._renderLive(live);
-          if (live.utterances.length) $('liveUseBtn').disabled = false;
+          if (mode === 'local') {
+            live.partial = text;
+            this._renderLive(live);
+            if (live.stopping) this._finalizeLive(live);  // résultat final après stop
+          } else {
+            live.delta = '';
+            if (text) live.utterances.push(text);
+            this._renderLive(live);
+            if (live.utterances.length) $('liveUseBtn').disabled = false;
+          }
         } else if (msg.type === 'error') {
           this._toast('Erreur transcription live : ' + (msg.message || ''));
-          this._stopLive();
+          this._finalizeLive(live);
         }
       };
-      ws.onclose = () => { if (this._live === live) this._stopLive(); };
+      ws.onclose = () => { if (this._live === live || live.stopping) this._finalizeLive(live); };
     } catch (e) {
       this._toast('Erreur transcription live : ' + e.message);
-      this._stopLive();
+      this._finalizeLive(live);
     }
   }
 
   _stopLive() {
     const live = this._live;
     if (!live) return;
-    this._live = null;
+    if (live.mode === 'local' && live.ws && live.ws.readyState === WebSocket.OPEN && live.ready) {
+      // mode local : demande la transcription finale, la fermeture se fait à sa réception
+      if (live.stopping) { this._finalizeLive(live); return; }  // 2e clic = forcer
+      live.stopping = true;
+      try { live.stream.getTracks().forEach(t => t.stop()); } catch (_) {}
+      try { live.ws.send(JSON.stringify({ type: 'stop' })); } catch (_) { this._finalizeLive(live); return; }
+      $('liveStatus').textContent = 'Finalisation de la transcription…';
+      // filet de sécurité si le serveur ne répond pas
+      setTimeout(() => { if (this._live === live) this._finalizeLive(live); }, 90000);
+      return;
+    }
     try { if (live.ws && live.ws.readyState === WebSocket.OPEN) live.ws.send(JSON.stringify({ type: 'stop' })); } catch (_) {}
-    try { if (live.ws) live.ws.close(); } catch (_) {}
+    this._finalizeLive(live);
+  }
+
+  _finalizeLive(live) {
+    if (!live) return;
+    if (this._live === live) this._live = null;
+    try { if (live.ws) { live.ws.onclose = null; live.ws.close(); } } catch (_) {}
     try { live.stream.getTracks().forEach(t => t.stop()); } catch (_) {}
-    try { if (live.ctx) live.ctx.close(); } catch (_) {}
+    try { if (live.ctx && live.ctx.state !== 'closed') live.ctx.close(); } catch (_) {}
     $('liveBtn').classList.remove('recording');
     $('liveBtnLabel').textContent = 'Micro live';
     $('livePanel').classList.add('stopped');
     $('liveStatus').textContent = 'Arrêté';
     // conserve la transcription pour relecture / envoi au pipeline
-    this._lastLiveTranscript = live.utterances.join('\n\n');
+    this._lastLiveTranscript = live.mode === 'local'
+      ? (live.partial || '')
+      : live.utterances.join('\n\n');
     $('liveUseBtn').disabled = !this._lastLiveTranscript.trim();
   }
 
   _renderLive(live) {
-    // Rendu via DOM (pas d'innerHTML) — le transcript vient d'une API externe
+    // Rendu via DOM (pas d'innerHTML) — le transcript vient d'une source externe
     const box = $('liveText');
     box.textContent = '';
+    if (live.mode === 'local') {
+      if (live.partial) box.appendChild(document.createTextNode(live.partial));
+      else {
+        const span = document.createElement('span');
+        span.className = 'live-delta';
+        span.textContent = 'Parlez — le texte apparaît après quelques secondes…';
+        box.appendChild(span);
+      }
+      box.scrollTop = box.scrollHeight;
+      return;
+    }
     live.utterances.forEach((u, i) => {
       if (i) box.appendChild(document.createTextNode('\n\n'));
       box.appendChild(document.createTextNode(u));
@@ -493,6 +709,7 @@ class App {
       this._startSSE();
     } catch (e) {
       this._toast(`Échec du lancement : ${e.message}`);
+      this._queueContinue();
     } finally {
       $('submitBtn').disabled = false;
       $('submitBtn').textContent = 'Transcrire';
@@ -648,6 +865,7 @@ class App {
         this._stopSP(); this._stopSSE();
         this._toast(`Échec : ${task.error || 'erreur de traitement'}`);
         this.showView('new');
+        this._queueContinue();
       }
     };
 
@@ -752,6 +970,7 @@ class App {
 
     this._renderResult(entry);
     this.showView('results', { navKey: 'history' });
+    this._queueContinue();
   }
 
   _buildEntry(task, elapsedMs) {
@@ -782,6 +1001,8 @@ class App {
         kind: task.media_kind || 'video',
         size: task.media_size_bytes || 0,
       } : null,
+      srt: task.srt_filename || null,
+      vtt: task.vtt_filename || null,
     };
   }
 
@@ -810,6 +1031,14 @@ class App {
     $('noSpeechBanner').classList.toggle('show', entry.noSpeech);
     $('tabSummary').style.display = entry.noSpeech ? 'none' : '';
     $('tabTranslation').style.display = entry.showTranslation ? '' : 'none';
+
+    /* Sous-titres SRT/VTT (générés sur le chemin Whisper) */
+    $('srtBtn').style.display = entry.srt ? '' : 'none';
+    $('vttBtn').style.display = entry.vtt ? '' : 'none';
+
+    /* Chat : repart de zéro pour chaque résultat affiché */
+    this.chatHistory = [];
+    $('chatLog').textContent = '';
 
     /* Média */
     const block = $('mediaBlock'), frame = $('mediaFrame');
