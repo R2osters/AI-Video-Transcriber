@@ -70,3 +70,11 @@ models/
 .claude/
 .claude-flow/
 dict
+
+# Desktop (Electron/PyInstaller) — artefacts de build
+desktop/node_modules/
+desktop/.venv/
+desktop/dist-backend/
+desktop/dist-installer/
+desktop/resources/bin/
+desktop/*.spec.bak

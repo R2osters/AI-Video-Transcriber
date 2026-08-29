@@ -1,0 +1,56 @@
+{
+  "name": "ai-video-transcriber-desktop",
+  "version": "1.0.0",
+  "description": "AI Video Transcriber - application de bureau (Electron + FastAPI)",
+  "main": "main.js",
+  "author": "Gédéon Compaore",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build:backend": "powershell -ExecutionPolicy Bypass -File scripts/build-backend.ps1",
+    "ffmpeg": "powershell -ExecutionPolicy Bypass -File scripts/download-ffmpeg.ps1",
+    "dist": "electron-builder --win",
+    "dist:full": "npm run build:backend && npm run ffmpeg && electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.gedeon.aivideotranscriber",
+    "productName": "AI Video Transcriber",
+    "directories": {
+      "output": "dist-installer"
+    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "extraResources": [
+      {
+        "from": "dist-backend/AVT-Backend",
+        "to": "backend/AVT-Backend"
+      },
+      {
+        "from": "resources/bin",
+        "to": "bin"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "shortcutName": "AI Video Transcriber"
+    }
+  }
+}
