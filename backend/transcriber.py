@@ -125,10 +125,11 @@ class Transcriber:
         轻量转录：直接返回纯文本（无 Markdown/时间戳）。
         供实时本地转录使用 — beam_size=1 换速度。
         """
-        self._load_model()
         import asyncio
 
         def _run():
+            # 模型加载（含首次下载）也放线程里，避免阻塞事件循环（WS ping 超时）
+            self._load_model()
             segments, _info = self.model.transcribe(
                 audio_path,
                 language=language,

@@ -1087,8 +1087,11 @@ async def chat_with_transcript(
     if not question:
         raise HTTPException(status_code=400, detail="问题不能为空")
 
-    # 组装客户端：前端凭据优先，否则用服务器全局配置
-    effective_key = (api_key or "").strip() or os.getenv("OPENAI_API_KEY", "")
+    # 组装客户端：前端凭据优先，否则用服务器全局配置（占位符视为未配置）
+    _PLACEHOLDER_KEYS = {"your_openai_api_key_here", "changeme", "sk-xxx", "sk-..."}
+    effective_key = (api_key or "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
+    if effective_key.lower() in _PLACEHOLDER_KEYS:
+        effective_key = ""
     effective_url = (model_base_url or "").strip().rstrip("/") or os.getenv("OPENAI_BASE_URL") or None
     if not effective_key:
         # 无 API Key：本地检索回退 — 返回与问题最相关的转录片段
@@ -1136,8 +1139,10 @@ async def chat_with_transcript(
         answer = await asyncio.to_thread(_ask)
         return {"answer": answer or ""}
     except Exception as e:
-        logger.error(f"chat 调用失败: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
+        logger.error(f"chat 调用失败，回退本地检索: {e}")
+        # API 失败（无效 Key、配额…）→ 本地检索回退而不是报错
+        local = _local_chat_answer(transcript, question)
+        return {"answer": f"{local}\n\n*(API indisponible : {e})*", "local": True}
 
 
 @app.get("/api/history")
