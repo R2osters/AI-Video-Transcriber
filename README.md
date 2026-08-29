@@ -15,14 +15,19 @@ An AI-powered tool to transcribe, summarize, and archive videos and podcasts —
 - 🎥 **Multi-Platform Support**: Works with YouTube, TikTok, Bilibili, Apple Podcasts, SoundCloud, and 30+ more
 - ⚡ **Subtitle-First Architecture**: For platforms with native subtitles (e.g. YouTube), transcripts are extracted instantly — no audio download needed. Whisper is only a fallback, making the whole pipeline dramatically faster
 - 🎬 **Original Video Download**: Keep the source video alongside the transcript. It downloads **in parallel** with transcription, previews inline in the results card, and saves with one click. On the Whisper path the audio is extracted from that same file, so the video is only fetched once. Toggle **Keep original video** off when you want text only
-- 📁 **Local File Upload**: Drag-and-drop or pick a file — `.txt` (treated as transcript text), `.mp3`, `.mp4`, `.m4a`, `.wav`, `.webm`, `.mkv`, `.ogg`, `.flac`. Media is normalized with FFmpeg for Whisper, then runs the same optimize → translate → summarize pipeline as URLs
+- 📁 **Local File Upload**: Drag-and-drop or pick a file — supported formats include `.txt` (treated as transcript text), audio (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.aac`, `.opus`, `.wma`, `.aiff`) and video (`.mp4`, `.webm`, `.mkv`, `.mov`, `.avi`). Media is normalized with FFmpeg for Whisper; the same optimize → translate → summarize pipeline runs as for URLs
 - 🗣️ **Intelligent Transcription**: High-accuracy speech-to-text using Faster-Whisper when subtitles aren't available
 - 🤖 **AI Text Optimization**: Automatic typo correction, sentence completion, and intelligent paragraphing
 - 🌍 **Multi-Language Summaries**: Generate intelligent summaries in 11 languages
 - ⚙️ **Conditional Translation**: Auto-translates the transcript when the summary language differs from the source language
 - 🔧 **Bring Your Own Model**: Configure any OpenAI-compatible API endpoint (OpenAI, OpenRouter, local LLM, etc.) directly in the UI — enter your API Base URL and API Key, then click **Fetch** to auto-discover available models
 - 📡 **Live Progress**: Server-sent events stream real-time status, with a badge showing whether the job took the subtitle or Whisper path
-- 📱 **Mobile-Friendly**: Responsive layout, dark UI
+- 🎙️ **Live Microphone Transcription**: Stream your mic and watch the transcript appear as you speak — fully local via faster-whisper (no key), or via the OpenAI Realtime API with an OpenAI key
+- 📚 **Batch Uploads**: Drop several files at once — they queue up and are transcribed one after another with per-file status
+- 💬 **Chat with the Transcript**: Ask questions about any completed transcription; answers are grounded in the transcript via your configured model
+- 📝 **SRT/VTT Export**: When Whisper runs, timestamped `.srt` and `.vtt` subtitle files are generated for use in video editors and players
+- 👥 **Speaker Diarization (optional)**: Label segments with `Speaker 1/2/…` via pyannote-audio — enable with `ENABLE_DIARIZATION=1` + `HF_TOKEN` after `pip install pyannote.audio`
+- 📱 **Mobile-Friendly**: Responsive layout
 
 ## 📑 Contents
 

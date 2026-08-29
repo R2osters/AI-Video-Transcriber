@@ -18,6 +18,8 @@ class Transcriber:
         self.model_size = model_size
         self.model = None
         self.last_detected_language = None
+        # 最近一次转录的原始分段（供 SRT/VTT 导出使用）
+        self.last_segments = []
         
     def _load_model(self):
         """延迟加载模型"""
@@ -89,16 +91,25 @@ class Transcriber:
             transcript_lines.append("## Transcription Content")
             transcript_lines.append("")
             
-            # 添加时间戳和文本
+            # 添加时间戳和文本，同时保留原始分段供 SRT/VTT 导出
+            raw_segments = []
             for segment in segments:
                 start_time = self._format_time(segment.start)
                 end_time = self._format_time(segment.end)
                 text = segment.text.strip()
-                
+
+                raw_segments.append({
+                    "start": float(segment.start),
+                    "end": float(segment.end),
+                    "text": text,
+                })
+
                 transcript_lines.append(f"**[{start_time} - {end_time}]**")
                 transcript_lines.append("")
                 transcript_lines.append(text)
                 transcript_lines.append("")
+
+            self.last_segments = raw_segments
             
             transcript_text = "\n".join(transcript_lines)
             logger.info("转录完成")

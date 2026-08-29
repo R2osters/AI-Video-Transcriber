@@ -10,3 +10,7 @@ websockets>=12.0
 
 # Only needed for mcp_server.py (agent/tool integration)
 mcp>=2.0.0
+
+# Optional — speaker diarization (heavy: pulls torch). Enable with
+# ENABLE_DIARIZATION=1 + HF_TOKEN after installing:
+# pyannote.audio>=3.1

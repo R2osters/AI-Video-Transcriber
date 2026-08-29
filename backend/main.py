@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 import os
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 import aiofiles
@@ -27,6 +28,7 @@ from pipeline import (
     transcribed_speech as _transcribed_speech,
     txt_to_raw_transcript_markdown as _txt_to_raw_transcript_markdown,
 )
+from diarizer import Diarizer
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -84,6 +86,7 @@ def get_transcriber(model_size: str = "") -> Transcriber:
 
 summarizer = Summarizer()
 translator = Translator()
+diarizer = Diarizer()
 
 # 存储任务状态 - 使用文件持久化
 import threading
@@ -141,6 +144,14 @@ active_tasks = {}
 sse_connections = {}
 
 # 本地上传：允许的类型与大小上限（MB），可用环境变量 UPLOAD_MAX_MB 调整
+# 覆盖 pipeline 中的默认列表：支持更多格式（.aac/.opus/.wma/.aiff/.mov/.avi）
+UPLOAD_ALLOWED_EXT = frozenset({
+    ".txt",
+    # audio
+    ".mp3", ".m4a", ".wav", ".ogg", ".flac", ".aac", ".opus", ".wma", ".aiff",
+    # vidéo
+    ".mp4", ".webm", ".mkv", ".mov", ".avi",
+})
 UPLOAD_MAX_MB = int(os.getenv("UPLOAD_MAX_MB", "200"))
 
 # 原视频下载：清晰度上限，避免 4K 源拖慢任务并占满磁盘
@@ -229,6 +240,86 @@ def _media_result_fields(
     }
 
 
+def _format_ts(seconds: float, sep: str) -> str:
+    """秒 → HH:MM:SS,mmm（SRT）或 HH:MM:SS.mmm（VTT）。"""
+    ms = int(round(seconds * 1000))
+    h, rem = divmod(ms, 3600000)
+    m, rem = divmod(rem, 60000)
+    s, ms = divmod(rem, 1000)
+    return f"{h:02d}:{m:02d}:{s:02d}{sep}{ms:03d}"
+
+
+def _segments_to_srt(segments: list) -> str:
+    lines = []
+    for i, seg in enumerate(segments, 1):
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        speaker = seg.get("speaker")
+        if speaker:
+            text = f"{speaker}: {text}"
+        lines.append(str(i))
+        lines.append(f"{_format_ts(seg['start'], ',')} --> {_format_ts(seg['end'], ',')}")
+        lines.append(text)
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _segments_to_vtt(segments: list) -> str:
+    lines = ["WEBVTT", ""]
+    for seg in segments:
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        speaker = seg.get("speaker")
+        if speaker:
+            text = f"<v {speaker}>{text}"
+        lines.append(f"{_format_ts(seg['start'], '.')} --> {_format_ts(seg['end'], '.')}")
+        lines.append(text)
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _rebuild_transcript_with_speakers(raw_script: str, segments: list) -> str:
+    """用带说话人标签的分段重建 Markdown 正文，保留原头部（语言信息）。"""
+    marker = "## Transcription Content"
+    idx = raw_script.find(marker)
+    head = raw_script[: idx + len(marker)] if idx != -1 else raw_script
+    lines = [head, ""]
+    for seg in segments:
+        start = transcriber._format_time(seg["start"])
+        end = transcriber._format_time(seg["end"])
+        speaker = seg.get("speaker")
+        prefix = f"**{speaker}:** " if speaker else ""
+        lines.append(f"**[{start} - {end}]**")
+        lines.append("")
+        lines.append(f"{prefix}{seg['text']}")
+        lines.append("")
+    return "\n".join(lines)
+
+
+async def _maybe_diarize(task_id: str, audio_path: str, segments, raw_script: str):
+    """启用时执行说话人分离；返回（可能更新的）segments 与 raw_script。"""
+    if not diarizer.enabled or not segments:
+        return segments, raw_script
+    try:
+        tasks[task_id].update({
+            "progress": 48,
+            "message": "正在识别说话人...",
+        })
+        save_tasks(tasks)
+        await broadcast_task_update(task_id, tasks[task_id])
+
+        turns = await diarizer.diarize(audio_path)
+        if turns:
+            segments = Diarizer.assign_speakers(segments, turns)
+            raw_script = _rebuild_transcript_with_speakers(raw_script, segments)
+            logger.info(f"说话人分离完成: {len(turns)} 个语音段")
+    except Exception as e:
+        logger.warning(f"说话人分离失败，继续无标签流程: {e}")
+    return segments, raw_script
+
+
 async def _run_post_extract_pipeline(
     task_id: str,
     raw_script: str,
@@ -243,6 +334,7 @@ async def _run_post_extract_pipeline(
     media_task: Optional[asyncio.Task] = None,
     media_filename: Optional[str] = None,
     media_download_name: Optional[str] = None,
+    segments: Optional[list] = None,
 ) -> None:
     """取得 raw_script 后的共用管线：归档、优化、翻译、摘要、附带原视频、广播。
 
@@ -251,6 +343,21 @@ async def _run_post_extract_pipeline(
     """
     short_id = task_id.replace("-", "")[:6]
     safe_title = _sanitize_title_for_filename(video_title)
+
+    # 有 Whisper 分段时导出 SRT/VTT 字幕文件
+    if segments:
+        try:
+            srt_filename = f"subtitles_{safe_title}_{short_id}.srt"
+            vtt_filename = f"subtitles_{safe_title}_{short_id}.vtt"
+            (TEMP_DIR / srt_filename).write_text(_segments_to_srt(segments), encoding="utf-8")
+            (TEMP_DIR / vtt_filename).write_text(_segments_to_vtt(segments), encoding="utf-8")
+            tasks[task_id].update({
+                "srt_filename": srt_filename,
+                "vtt_filename": vtt_filename,
+            })
+            save_tasks(tasks)
+        except Exception as e:
+            logger.error(f"生成SRT/VTT失败: {e}")
 
     try:
         raw_md_filename = f"raw_{safe_title}_{short_id}.md"
@@ -473,6 +580,7 @@ async def _enqueue_upload_job(
     model_base_url: str,
     model_id: str,
     whisper_model: str = "",
+    audio_language: str = "",
 ) -> dict:
     """保存上传文件并入队 process_upload_task，返回 {task_id, message}。"""
     raw_name = file.filename or "upload.bin"
@@ -527,6 +635,7 @@ async def _enqueue_upload_job(
         "summary": None,
         "error": None,
         "url": source_label,
+        "created_at": time.time(),
     }
     save_tasks(tasks)
 
@@ -542,11 +651,20 @@ async def _enqueue_upload_job(
             model_base_url,
             model_id,
             whisper_model,
+            audio_language,
         )
     )
     active_tasks[task_id] = bg
 
     return {"task_id": task_id, "message": "任务已创建，正在处理中..."}
+
+
+def _sanitize_audio_language(code: str) -> str:
+    """校验用户指定的音频语言代码；空或 auto 表示自动检测。"""
+    code = (code or "").strip().lower()
+    if not code or code == "auto":
+        return ""
+    return code if re.fullmatch(r"[a-z]{2,3}", code) else ""
 
 
 @app.post("/api/process-video")
@@ -558,6 +676,7 @@ async def process_video(
     model_id: str = Form(default=""),
     download_video: str = Form(default="1"),
     whisper_model: str = Form(default=""),
+    audio_language: str = Form(default=""),
     file: Optional[UploadFile] = File(None),
 ):
     """
@@ -566,9 +685,12 @@ async def process_video(
     """
     want_video = str(download_video).strip().lower() not in ("0", "false", "no", "off", "")
     try:
+        audio_language = _sanitize_audio_language(audio_language)
+
         if file is not None and (file.filename or "").strip():
             return await _enqueue_upload_job(
-                file, summary_language, api_key, model_base_url, model_id, whisper_model
+                file, summary_language, api_key, model_base_url, model_id,
+                whisper_model, audio_language,
             )
 
         stripped = (url or "").strip()
@@ -601,7 +723,8 @@ async def process_video(
             "script": None,
             "summary": None,
             "error": None,
-            "url": url  # 保存URL用于去重
+            "url": url,  # 保存URL用于去重
+            "created_at": time.time(),
         }
         save_tasks(tasks)
         
@@ -609,7 +732,7 @@ async def process_video(
         task = asyncio.create_task(
             process_video_task(
                 task_id, url, summary_language, api_key, model_base_url, model_id, want_video,
-                whisper_model,
+                whisper_model, audio_language,
             )
         )
         active_tasks[task_id] = task
@@ -631,6 +754,7 @@ async def process_video_task(
     model_id: str = "",
     want_video: bool = True,
     whisper_model: str = "",
+    audio_language: str = "",
 ):
     """
     异步处理视频任务
@@ -672,6 +796,7 @@ async def process_video_task(
 
         subtitle_text, sub_title, sub_lang = await video_processor.fetch_subtitles(url, TEMP_DIR)
 
+        whisper_segments = None
         if subtitle_text:
             # ── 快速路径：有字幕，跳过音频下载和 Whisper ──────────────────
             video_title = sub_title
@@ -731,9 +856,13 @@ async def process_video_task(
             await broadcast_task_update(task_id, tasks[task_id])
 
             req_transcriber = get_transcriber(whisper_model)
-            raw_script = await req_transcriber.transcribe(audio_path)
+            raw_script = await req_transcriber.transcribe(audio_path, language=audio_language or None)
             # 下游 _run_post_extract_pipeline 从全局实例读语言，保持同步
             transcriber.last_detected_language = req_transcriber.last_detected_language
+            whisper_segments = list(req_transcriber.last_segments)
+            whisper_segments, raw_script = await _maybe_diarize(
+                task_id, audio_path, whisper_segments, raw_script
+            )
 
         await _run_post_extract_pipeline(
             task_id=task_id,
@@ -747,6 +876,7 @@ async def process_video_task(
             model_base_url=model_base_url,
             model_id=model_id,
             media_task=media_task,
+            segments=whisper_segments,
         )
 
         # 不要立即删除临时文件！保留给用户下载
@@ -780,10 +910,12 @@ async def process_upload(
     model_base_url: str = Form(default=""),
     model_id: str = Form(default=""),
     whisper_model: str = Form(default=""),
+    audio_language: str = Form(default=""),
 ):
     """独立上传入口；逻辑与 multipart 带 file 的 /api/process-video 相同。"""
     return await _enqueue_upload_job(
-        file, summary_language, api_key, model_base_url, model_id, whisper_model
+        file, summary_language, api_key, model_base_url, model_id,
+        whisper_model, _sanitize_audio_language(audio_language),
     )
 
 
@@ -798,6 +930,7 @@ async def process_upload_task(
     model_base_url: str = "",
     model_id: str = "",
     whisper_model: str = "",
+    audio_language: str = "",
 ):
     source_ref = f"upload:{original_name}"
     try:
@@ -814,6 +947,7 @@ async def process_upload_task(
         else:
             request_summarizer = summarizer
 
+        whisper_segments = None
         if ext_lower == ".txt":
             tasks[task_id].update({
                 "progress": 20,
@@ -852,8 +986,12 @@ async def process_upload_task(
             await broadcast_task_update(task_id, tasks[task_id])
 
             req_transcriber = get_transcriber(whisper_model)
-            raw_script = await req_transcriber.transcribe(audio_path)
+            raw_script = await req_transcriber.transcribe(audio_path, language=audio_language or None)
             transcriber.last_detected_language = req_transcriber.last_detected_language
+            whisper_segments = list(req_transcriber.last_segments)
+            whisper_segments, raw_script = await _maybe_diarize(
+                task_id, audio_path, whisper_segments, raw_script
+            )
 
         # 上传的原件本身就是「原视频」，无需再下载，直接挂到结果上
         is_media_upload = ext_lower != ".txt"
@@ -871,6 +1009,7 @@ async def process_upload_task(
             model_id=model_id,
             media_filename=saved_path.name if is_media_upload else None,
             media_download_name=original_name if is_media_upload else None,
+            segments=whisper_segments,
         )
 
     except Exception as e:
@@ -884,6 +1023,103 @@ async def process_upload_task(
         })
         save_tasks(tasks)
         await broadcast_task_update(task_id, tasks[task_id])
+
+
+@app.post("/api/chat")
+async def chat_with_transcript(
+    task_id: str = Form(...),
+    question: str = Form(...),
+    history: str = Form(default="[]"),
+    api_key: str = Form(default=""),
+    model_base_url: str = Form(default=""),
+    model_id: str = Form(default=""),
+):
+    """基于已完成任务的转录文本回答问题。"""
+    task = tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    if task.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="任务尚未完成")
+
+    transcript = task.get("script") or ""
+    if not transcript.strip():
+        raise HTTPException(status_code=400, detail="没有可用的转录文本")
+
+    question = (question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="问题不能为空")
+
+    # 组装客户端：前端凭据优先，否则用服务器全局配置
+    effective_key = (api_key or "").strip() or os.getenv("OPENAI_API_KEY", "")
+    effective_url = (model_base_url or "").strip().rstrip("/") or os.getenv("OPENAI_BASE_URL") or None
+    if not effective_key:
+        raise HTTPException(status_code=400, detail="API key is required")
+    model = (model_id or "").strip() or summarizer.fast_model
+
+    # 转录文本截断，避免超出上下文窗口
+    max_chars = int(os.getenv("CHAT_TRANSCRIPT_MAX_CHARS", "48000"))
+    excerpt = transcript[:max_chars]
+
+    try:
+        prior = json.loads(history or "[]")
+        if not isinstance(prior, list):
+            prior = []
+    except Exception:
+        prior = []
+
+    messages = [{
+        "role": "system",
+        "content": (
+            "You are a helpful assistant answering questions about a transcript. "
+            "Base your answers strictly on the transcript below. If the answer is not "
+            "in the transcript, say so. Answer in the language of the user's question.\n\n"
+            f"TRANSCRIPT (video: {task.get('video_title') or 'untitled'}):\n{excerpt}"
+        ),
+    }]
+    for m in prior[-10:]:
+        role = m.get("role")
+        content = (m.get("content") or "").strip()
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": content[:8000]})
+    messages.append({"role": "user", "content": question[:4000]})
+
+    def _ask():
+        client = openai.OpenAI(api_key=effective_key, base_url=effective_url)
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.3,
+            max_tokens=1500,
+        )
+        return resp.choices[0].message.content
+
+    try:
+        answer = await asyncio.to_thread(_ask)
+        return {"answer": answer or ""}
+    except Exception as e:
+        logger.error(f"chat 调用失败: {e}")
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@app.get("/api/history")
+async def get_history(limit: int = 100):
+    """已完成任务的紧凑列表（历史记录），按创建时间倒序。"""
+    items = []
+    for tid, t in tasks.items():
+        if t.get("status") != "completed":
+            continue
+        items.append({
+            "task_id": tid,
+            "video_title": t.get("video_title") or "(untitled)",
+            "url": t.get("url"),
+            "created_at": t.get("created_at"),
+            "detected_language": t.get("detected_language"),
+            "summary_language": t.get("summary_language"),
+            "has_translation": bool(t.get("translation")),
+            "has_subtitles": bool(t.get("srt_filename")),
+        })
+    items.sort(key=lambda x: x.get("created_at") or 0, reverse=True)
+    return {"items": items[:max(1, min(limit, 500))]}
 
 
 @app.get("/api/task-status/{task_id}")
@@ -957,7 +1193,12 @@ async def task_stream(task_id: str):
         }
     )
 
-DOWNLOAD_ALLOWED_EXT = frozenset({".md"}) | frozenset(MEDIA_MIME)
+TEXT_DOWNLOAD_MIME = {
+    ".md": "text/markdown",
+    ".srt": "application/x-subrip",
+    ".vtt": "text/vtt",
+}
+DOWNLOAD_ALLOWED_EXT = frozenset(TEXT_DOWNLOAD_MIME) | frozenset(MEDIA_MIME)
 
 
 @app.get("/api/download/{filename}")
@@ -970,7 +1211,7 @@ async def download_file(filename: str, name: str = ""):
     try:
         file_path = _resolve_temp_file(filename, DOWNLOAD_ALLOWED_EXT)
         ext = file_path.suffix.lower()
-        media_type = "text/markdown" if ext == ".md" else MEDIA_MIME[ext]
+        media_type = TEXT_DOWNLOAD_MIME.get(ext) or MEDIA_MIME[ext]
         download_name = _safe_download_name(name, ext) or filename
 
         return FileResponse(
