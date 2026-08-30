@@ -85,3 +85,7 @@ desktop/*.spec.bak
 # Installeurs générés (jamais versionnés — passer par une release taguée)
 *.exe
 releases/
+
+# PyInstaller écrit son dossier de travail dans desktop/ (workpath)
+desktop/build/backend/
+desktop/build-pyinstaller/
