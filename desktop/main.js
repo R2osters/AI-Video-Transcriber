@@ -4,10 +4,18 @@
 // existante (static/ servie par FastAPI).
 const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
 const { spawn } = require('child_process');
+const crypto = require('crypto');
 const path = require('path');
 const http = require('http');
 const net = require('net');
 const fs = require('fs');
+
+// Jeton de session : l'API écoute sur la boucle locale, donc n'importe quelle page
+// web ouverte dans le navigateur de l'utilisateur pourrait l'appeler. Le backend
+// exige ce jeton dès qu'AVT_TOKEN est défini et l'injecte lui-même dans l'index.html
+// qu'il sert ; une page tierce ne l'a pas. Régénéré à chaque lancement, jamais
+// écrit sur disque.
+const SESSION_TOKEN = crypto.randomBytes(32).toString('hex');
 
 // Port : 8765 par défaut, mais on bascule sur un port libre s'il est occupé
 // (sinon uvicorn meurt au démarrage et l'app ne s'ouvre jamais).
@@ -76,6 +84,7 @@ function startBackend() {
     AVT_PORT: String(port),
     PORT: String(port),
     AVT_DATA_DIR: DATA_DIR,
+    AVT_TOKEN: SESSION_TOKEN,
   };
 
   if (app.isPackaged) {
