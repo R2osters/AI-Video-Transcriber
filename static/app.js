@@ -7,6 +7,30 @@
 const API = '/api';
 const $ = (id) => document.getElementById(id);
 
+/* ── Jeton d'accès local (application installée) ───────────────
+   Le serveur écoute sur 127.0.0.1, adresse qu'une page web tierce ouverte
+   dans le navigateur peut aussi appeler. Le backend injecte ce jeton dans la
+   page qu'il sert lui-même ; une page tierce ne l'a pas, et se voit refuser
+   l'accès à la bibliothèque. Absent en mode web : tout fonctionne comme avant. */
+const AVT_TOKEN = (typeof window !== 'undefined' && window.__AVT_TOKEN__) || '';
+
+/* Pour <audio>, <video> et les liens de téléchargement, qui ne passent pas par
+   fetch() et ne peuvent donc pas porter d'en-tête. Reste local à la machine. */
+const withTok = (url) => AVT_TOKEN
+  ? `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(AVT_TOKEN)}`
+  : url;
+
+if (AVT_TOKEN) {
+  const _fetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (url.startsWith('/api') || url.startsWith(`${location.origin}/api`)) {
+      init = { ...init, headers: { ...(init.headers || {}), 'X-AVT-Token': AVT_TOKEN } };
+    }
+    return _fetch(input, init);
+  };
+}
+
 /* Étapes du pipeline (vue progression) */
 const STEPS = ['download', 'transcribe', 'optimize', 'translate', 'summarize'];
 
@@ -504,9 +528,9 @@ class App {
     const a = document.createElement('a');
     // Entrée issue de la bibliothèque : on adresse le produit par son type,
     // sans dépendre du nom de fichier d'origine.
-    a.href = this.result.assetBase
+    a.href = withTok(this.result.assetBase
       ? `${this.result.assetBase}/${kind}?download=true`
-      : `${API}/download/${encodeURIComponent(file)}`;
+      : `${API}/download/${encodeURIComponent(file)}`);
     a.download = this.result.assetBase ? `${this.result.title || 'sous-titres'}.${kind}` : file;
     document.body.appendChild(a);
     a.click();
@@ -553,7 +577,7 @@ class App {
 
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const wsPath = mode === 'openai' ? '/ws/live-transcribe' : '/ws/live-local';
-      const ws = new WebSocket(`${proto}://${location.host}${wsPath}`);
+      const ws = new WebSocket(withTok(`${proto}://${location.host}${wsPath}`));
       live.ws = ws;
 
       ws.onopen = () => {
@@ -1059,7 +1083,7 @@ class App {
     if (entry.media) {
       const isAudio = entry.media.kind === 'audio';
       const el = document.createElement(isAudio ? 'audio' : 'video');
-      el.src = entry.media.url || `${API}/media/${encodeURIComponent(entry.media.file)}`;
+      el.src = withTok(entry.media.url || `${API}/media/${encodeURIComponent(entry.media.file)}`);
       el.controls = true;
       el.preload = 'metadata';
       el.addEventListener('error', () => { block.style.display = 'none'; });
@@ -1135,9 +1159,9 @@ class App {
     const m = this.result?.media;
     if (!m) { this._toast('Aucun média disponible'); return; }
     const a = document.createElement('a');
-    a.href = m.url
+    a.href = withTok(m.url
       ? `${m.url}?download=true`
-      : `${API}/download/${encodeURIComponent(m.file)}?name=${encodeURIComponent(m.name)}`;
+      : `${API}/download/${encodeURIComponent(m.file)}?name=${encodeURIComponent(m.name)}`);
     a.download = m.name;
     document.body.appendChild(a);
     a.click();
