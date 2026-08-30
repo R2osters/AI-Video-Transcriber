@@ -146,6 +146,15 @@ def main() -> None:
     # Cache modèles faster-whisper au même endroit (évite re-téléchargement par version)
     os.environ.setdefault("HF_HOME", str(data_dir / "models"))
 
+    # Transport Xet de huggingface_hub : observé bloqué net en cours de
+    # téléchargement, sans erreur ni progression. hf_xet est bien embarqué dans le
+    # bundle (_internal/hf_xet/), donc un utilisateur peut se retrouver avec un
+    # premier lancement figé sur « téléchargement du modèle » sans aucun message.
+    # Le transport HTTP classique est plus lent mais il aboutit ; pour 138 Mo une
+    # seule fois, c'est le bon compromis. setdefault : qui pose la variable
+    # lui-même garde la main.
+    os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
     # ffmpeg embarqué : dossier passé par Electron, sinon bin/ à côté de l'exe
     ffmpeg_dir = os.getenv("AVT_FFMPEG_DIR") or str(Path(sys.executable).parent / "bin")
     if Path(ffmpeg_dir).exists():
