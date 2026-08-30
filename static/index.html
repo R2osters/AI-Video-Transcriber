@@ -426,6 +426,55 @@
     .hist-entry:hover .title { font-weight: 600; color: var(--ink); }
     .hist-entry .meta { font-family: var(--mono); font-size: 10.5px; color: var(--faint); flex: none; }
 
+    /* La ligne porte maintenant des actions : la zone d'ouverture est un bouton
+       distinct (un bouton ne peut pas en contenir d'autres). */
+    .hist-entry .hist-open {
+      display: flex; align-items: center; gap: 14px;
+      flex: 1; min-width: 0; padding: 0; border: 0;
+      background: none; color: inherit; font: inherit;
+      text-align: left; cursor: pointer;
+    }
+    .hist-star, .hist-more {
+      flex: none; width: 26px; height: 26px; border: 0; border-radius: 7px;
+      background: none; color: var(--line); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; line-height: 1; transition: color .15s, background-color .15s, opacity .15s;
+    }
+    .hist-star.on { color: var(--ink); }
+    .hist-star:hover, .hist-more:hover { background: var(--cream); color: var(--ink); }
+    .hist-more { opacity: 0; }
+    .hist-entry:hover .hist-more, .hist-more:focus-visible { opacity: 1; }
+    .hist-rename {
+      flex: 1; min-width: 0; font-size: 13.5px; color: var(--ink);
+      padding: 3px 8px; border: 1px solid var(--accent); border-radius: 6px;
+      background: var(--surface); font-family: inherit;
+    }
+    .hist-menu {
+      position: fixed; z-index: 50; min-width: 150px; padding: 5px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 9px; box-shadow: 0 8px 24px rgba(0,0,0,.12);
+      display: flex; flex-direction: column;
+    }
+    .hist-menu button {
+      padding: 8px 10px; border: 0; border-radius: 6px; background: none;
+      color: var(--ink); font-size: 13px; text-align: left; cursor: pointer;
+    }
+    .hist-menu button:hover { background: var(--sand); }
+    .hist-menu button[data-act="delete"]:hover { color: #b4342a; }
+    .hist-more-row {
+      margin: 14px 0 0 12px; padding: 9px 16px; align-self: flex-start;
+      border: 1px dashed var(--line); border-radius: 9px; background: none;
+      font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: pointer;
+    }
+    .hist-more-row:hover { border-style: solid; color: var(--ink); }
+
+    .set-card.disk { width: 100%; }
+    .disk-summary { font-size: 14px; color: var(--ink); }
+    .disk-path {
+      font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+      word-break: break-all;
+    }
+
     .hist-empty {
       padding: 60px 22px; display: none;
       flex-direction: column; align-items: center; gap: 8px;
@@ -911,6 +960,7 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8C867C" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
         </div>
         <div class="txt">Aucune transcription pour l'instant</div>
+        <div class="txt" style="font-size:11px">Vos transcriptions seront conservées ici, sur cet ordinateur</div>
       </div>
       <div class="hist-foot" id="histFoot"></div>
     </section>
@@ -996,6 +1046,22 @@
             <button class="btn-secondary" id="resetBtn">Réinitialiser</button>
             <button class="btn-primary" id="saveBtn">Enregistrer</button>
           </div>
+        </div>
+      </div>
+
+      <div class="set-card disk card">
+        <div class="set-card-head">
+          <div class="set-card-title">Espace disque</div>
+          <button class="btn-secondary" id="openLibraryBtn" style="display:none">Ouvrir le dossier</button>
+        </div>
+        <div class="disk-summary" id="diskSummary">—</div>
+        <div class="disk-path" id="diskPath"></div>
+        <div class="set-hint">
+          Rien n'est supprimé automatiquement : ni purge par ancienneté, ni quota.
+          En échange la bibliothèque grossit — comptez environ 1 Mo par minute d'audio conservé.
+        </div>
+        <div class="set-actions">
+          <button class="btn-secondary" id="freeSpaceBtn">Libérer de l'espace</button>
         </div>
       </div>
     </section>
