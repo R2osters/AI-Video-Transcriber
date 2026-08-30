@@ -1,2 +1,14 @@
-// Préchargement minimal : aucune API Node exposée à l'UI.
-// L'UI web fonctionne à l'identique dans le navigateur et dans Electron.
+// Pont minimal entre l'UI web et Electron.
+// L'UI reste fonctionnelle sans lui : elle doit toujours tester `window.avt`
+// avant de s'en servir (dans un navigateur, l'objet n'existe pas).
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('avt', {
+  isDesktop: true,
+  version: () => ipcRenderer.invoke('avt:version'),
+  // Ouvre les dossiers dans l'explorateur Windows (aucun accès disque exposé à l'UI).
+  openLibrary: () => ipcRenderer.invoke('avt:open-library'),
+  openDataFolder: () => ipcRenderer.invoke('avt:open-data-dir'),
+  openLogs: () => ipcRenderer.invoke('avt:open-logs'),
+  engineStatus: () => ipcRenderer.invoke('avt:engine-status'),
+});

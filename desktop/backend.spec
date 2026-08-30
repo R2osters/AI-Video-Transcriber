@@ -9,7 +9,11 @@ BACKEND = ROOT / "backend"
 
 datas = [(str(ROOT / "static"), "static")]
 binaries = []
-hiddenimports = []
+# sqlite3 : la bibliothèque de transcriptions (backend/library.py) s'appuie sur
+# l'extension native _sqlite3. On la déclare explicitement au lieu de compter sur
+# la détection automatique ; le build la vérifie ensuite (voir build-backend.ps1,
+# étape « Verification du bundle » qui lance l'exe avec AVT_SELFTEST=1).
+hiddenimports = ["sqlite3", "_sqlite3"]
 
 # Paquets avec binaires natifs / données chargées dynamiquement
 for pkg in ("faster_whisper", "ctranslate2", "av"):
