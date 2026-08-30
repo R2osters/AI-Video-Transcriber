@@ -1,0 +1,87 @@
+name: Tests
+
+# La suite ne couvre pour l'instant que backend/library.py et le parcours
+# d'archivage : c'est le code qui garde les données de l'utilisateur, donc
+# celui dont une régression coûte le plus cher.
+on:
+  push:
+    branches: ['main', 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: unittest (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.11', '3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # backend/main.py importe fastapi, openai, yt_dlp… Sans ces paquets,
+      # tests/test_archive.py se déclarerait « skipped » et la CI serait verte
+      # sans avoir rien vérifié de l'archivage. faster-whisper est exclu : les
+      # tests le remplacent par un stub, et il tirerait ctranslate2 + PyAV
+      # (plusieurs centaines de Mo) pour rien.
+      - name: Dépendances (sans faster-whisper, stubbé par les tests)
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          grep -viE '^(faster-whisper|pyannote|mcp)' requirements.txt > ci-requirements.txt
+          echo "--- installé ---"; cat ci-requirements.txt
+          python -m pip install -r ci-requirements.txt
+
+      - name: Tests
+        shell: bash
+        run: python .github/scripts/run_tests.py
+
+  syntaxe:
+    name: Syntaxe (Python + Electron)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Attrape les erreurs de syntaxe dans les fichiers qu'aucun test n'importe
+      # — notamment desktop/, qui n'est exercé qu'au moment du build.
+      - name: Python compile
+        run: python -m compileall -q backend desktop
+
+      - name: Electron compile
+        run: |
+          for f in desktop/*.js; do node --check "$f"; done
+          node -e "JSON.parse(require('fs').readFileSync('desktop/package.json','utf8')); console.log('package.json valide')"
+
+      # Les .ps1 doivent rester en ASCII pur sans BOM : PowerShell 5.1 les lit
+      # en ANSI et un accent devient une erreur d'analyse au milieu du build.
+      - name: Scripts PowerShell en ASCII pur
+        run: |
+          python - <<'EOF'
+          import pathlib, sys
+          fautifs = []
+          for p in pathlib.Path("desktop/scripts").glob("*.ps1"):
+              b = p.read_bytes()
+              if b[:3] == b"\xef\xbb\xbf":
+                  fautifs.append(f"{p}: BOM UTF-8")
+              hors = [i for i, c in enumerate(b) if c > 127]
+              if hors:
+                  fautifs.append(f"{p}: {len(hors)} octet(s) non-ASCII (premier à l'offset {hors[0]})")
+          for f in fautifs:
+              print(f"::error::{f}")
+          sys.exit(1 if fautifs else 0)
+          EOF
