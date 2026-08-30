@@ -163,6 +163,16 @@ def main() -> None:
     if not getattr(sys, "frozen", False):
         sys.path.insert(0, str(res / "backend"))
 
+    # Les logs du backend sont en chinois (dépôt amont). Sur une console Windows
+    # en cp1252, logging lève UnicodeEncodeError et crache une trace ; on force
+    # l'UTF-8 quand c'est possible (le fichier backend.log est déjà en UTF-8).
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
     import logging
 
     logging.basicConfig(

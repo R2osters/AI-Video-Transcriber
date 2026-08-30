@@ -75,6 +75,12 @@ et publie son état dans `engine-status.json` (`starting` → `downloading` → 
 L'écran de démarrage suit cet état et propose **Continuer sans attendre** : le téléchargement
 se poursuit en arrière-plan. Réglage : `AVT_PRELOAD_MODEL` (vide = pas de préchargement).
 
+`HF_HOME` n'est posé que s'il n'existe pas déjà (`setdefault`). Sur une machine où il est
+défini pour d'autres outils, le modèle atterrit dans ce cache-là et non dans
+`<AVT_DATA_DIR>\models` — c'est voulu (cache partagé, pas de doublon de 150 Mo), mais
+ça surprend au débogage. La détection « modèle déjà présent » lit la même variable, donc
+les deux restent cohérents.
+
 ## Pont Electron exposé à l'UI
 
 `preload.js` expose `window.avt` (absent dans un navigateur — toujours tester avant usage) :

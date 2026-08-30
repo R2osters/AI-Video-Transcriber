@@ -18,7 +18,9 @@ Write-Host ">> Installation des dependances..."
 & $Py -m pip install pyinstaller
 
 Write-Host ">> Build PyInstaller..."
-& $Py -m PyInstaller backend.spec --noconfirm --distpath dist-backend
+# --workpath : sinon PyInstaller ecrit dans desktop\build\, ou vit l'icone de
+# l'installeur (dossier suivi par git via une exception du .gitignore).
+& $Py -m PyInstaller backend.spec --noconfirm --distpath dist-backend --workpath build-pyinstaller
 
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller a echoue ($LASTEXITCODE)" }
 
