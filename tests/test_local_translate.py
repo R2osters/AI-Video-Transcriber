@@ -110,11 +110,20 @@ class TestSentenceSplitting(unittest.TestCase):
 
 class TestChunking(unittest.TestCase):
 
-    def test_sentences_are_grouped_under_the_limit(self):
-        sentences = ["a" * 100] * 10
-        chunks = lt._chunk(sentences, max_chars=250)
-        self.assertTrue(all(len(c) <= 250 for c in chunks), [len(c) for c in chunks])
-        self.assertGreater(len(chunks), 1)
+    def test_one_unit_per_sentence(self):
+        """REGRESSION — les phrases ne doivent JAMAIS être regroupées.
+
+        NLLB est entraîné sur des phrases isolées : en lui en donnant deux d'un
+        coup, il ne traduit que la première et la seconde disparaît sans erreur ni
+        avertissement. Constaté sur le vrai modèle, invisible avec un substitut.
+        """
+        sentences = ["Une phrase courte.", "Une autre phrase.", "Et une troisième."]
+        self.assertEqual(lt._chunk(sentences), sentences,
+                         "chaque phrase doit partir seule au modèle")
+
+    def test_short_sentences_are_still_not_merged(self):
+        sentences = ["Un.", "Deux.", "Trois."]
+        self.assertEqual(len(lt._chunk(sentences, max_chars=900)), 3)
 
     def test_no_sentence_is_lost(self):
         sentences = [f"phrase numero {i}." for i in range(20)]
@@ -168,12 +177,20 @@ class TestTranslation(unittest.TestCase):
         self.assertEqual(len(out.split("\n")), 3, "la ligne vide entre les paragraphes doit survivre")
         self.assertEqual(out.split("\n")[1], "", "la ligne vide reste vide")
 
-    def test_every_chunk_is_sent_once(self):
+    def test_every_sentence_is_sent_once(self):
         tr = make_translator()
         text = "\n".join("Une phrase de test numéro %d." % i for i in range(5))
         tr.translate(text, "fr", "en")
         sent = len(tr._translator.batches[0]["sources"])
-        self.assertEqual(sent, 5, "un bloc par paragraphe non vide")
+        self.assertEqual(sent, 5, "une séquence par phrase")
+
+    def test_multiple_sentences_in_one_paragraph_are_all_sent(self):
+        """REGRESSION — deux phrases dans un même paragraphe partaient groupées,
+        et la seconde était perdue par le modèle."""
+        tr = make_translator()
+        tr.translate("Première phrase ici. Seconde phrase là.", "fr", "en")
+        sources = tr._translator.batches[0]["sources"]
+        self.assertEqual(len(sources), 2, "les deux phrases doivent partir séparément")
 
     def test_blank_lines_do_not_reach_the_model(self):
         tr = make_translator()
@@ -182,6 +199,20 @@ class TestTranslation(unittest.TestCase):
 
 
 class TestModelLifecycle(unittest.TestCase):
+
+    def setUp(self):
+        # Le seuil réel est de 50 Mo ; un test n'a pas à écrire 50 Mo pour le
+        # franchir. On l'abaisse le temps du test et on le restaure ensuite.
+        self._real_threshold = lt.LocalTranslator._MIN_WEIGHTS_BYTES
+        lt.LocalTranslator._MIN_WEIGHTS_BYTES = 1024
+
+    def tearDown(self):
+        lt.LocalTranslator._MIN_WEIGHTS_BYTES = self._real_threshold
+
+    @staticmethod
+    def _fake_weights(path, size):
+        with open(path / "model.bin", "wb") as f:
+            f.write(b"\0" * size)
 
     def test_status_starts_idle(self):
         self.assertEqual(lt.LocalTranslator().status["state"], "idle")
@@ -207,6 +238,38 @@ class TestModelLifecycle(unittest.TestCase):
         tr.unload()
         self.assertFalse(tr.is_loaded)
         self.assertEqual(tr.status["state"], "idle")
+
+    def test_partial_download_is_not_reported_as_ready(self):
+        """REGRESSION — un téléchargement interrompu laisse tous les petits fichiers
+        en place et seul model.bin manque. huggingface_hub considère alors que le
+        cliché existe : si on s'y fie, l'interface annonce « modèle installé » et la
+        panne n'apparaît qu'à la première traduction.
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            (path / "tokenizer.json").write_text("{}", encoding="utf-8")
+            (path / "config.json").write_text("{}", encoding="utf-8")
+            self.assertFalse(lt.LocalTranslator._looks_complete(path),
+                             "sans model.bin, le modèle n'est pas prêt")
+
+            # Poids tronqué : présent mais manifestement incomplet
+            self._fake_weights(path, 10)
+            self.assertFalse(lt.LocalTranslator._looks_complete(path),
+                             "un model.bin tronqué ne doit pas passer pour complet")
+
+            # Poids plausible + tokenizer : complet
+            self._fake_weights(path, lt.LocalTranslator._MIN_WEIGHTS_BYTES + 1)
+            self.assertTrue(lt.LocalTranslator._looks_complete(path))
+
+    def test_missing_tokenizer_is_not_ready(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            self._fake_weights(path, lt.LocalTranslator._MIN_WEIGHTS_BYTES + 1)
+            self.assertFalse(lt.LocalTranslator._looks_complete(path))
 
     def test_singleton_is_shared(self):
         """Le modèle pèse 646 Mo : jamais deux instances."""

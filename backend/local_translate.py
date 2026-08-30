@@ -66,27 +66,20 @@ def split_sentences(text: str) -> List[str]:
 
 
 def _chunk(sentences: List[str], max_chars: int = _MAX_CHUNK_CHARS) -> List[str]:
-    """把句子聚成不超过 max_chars 的块，尽量不拆句。"""
-    chunks: List[str] = []
-    current = ""
+    """把句子拆成送进模型的单元：**一句一个单元**。
+
+    这里曾经把多句合并成一个块以减少调用次数，结果是静默丢内容：NLLB 在句子级
+    语料上训练，喂进两句它只翻第一句，第二句无声消失。实测证实过一次。
+    因此只做一件事——超长句（缺标点的长段）硬切，其余原样保留。
+    """
+    units: List[str] = []
     for sentence in sentences:
         if len(sentence) > max_chars:
-            # 单句超长（缺标点的长段）：硬切，宁可切断也不喂爆模型
-            if current:
-                chunks.append(current)
-                current = ""
             for i in range(0, len(sentence), max_chars):
-                chunks.append(sentence[i:i + max_chars])
-            continue
-        candidate = f"{current} {sentence}".strip() if current else sentence
-        if len(candidate) > max_chars:
-            chunks.append(current)
-            current = sentence
-        else:
-            current = candidate
-    if current:
-        chunks.append(current)
-    return chunks
+                units.append(sentence[i:i + max_chars])
+        elif sentence.strip():
+            units.append(sentence)
+    return units
 
 
 class ModelUnavailable(RuntimeError):
@@ -113,18 +106,38 @@ class LocalTranslator:
     def _set_status(self, **fields) -> None:
         self._status.update(fields)
 
+    # 权重文件的最小合理体积。NLLB int8 约 622 MB；这里只做「不是残骸」的判断，
+    # 不写死具体数值，以便换用别的模型。
+    _MIN_WEIGHTS_BYTES = 50 * 1024 * 1024
+
+    @classmethod
+    def _looks_complete(cls, path: Path) -> bool:
+        """目录里是否有一份**可用**的模型。
+
+        只看文件是否存在是不够的：下载中断时，snapshot 目录里除 model.bin 之外
+        的小文件都已就位，huggingface_hub 依然会认为快照存在。若据此判定「已下载」，
+        界面会显示模型就绪，直到用户第一次翻译才炸——必须查权重本身。
+        """
+        weights = path / "model.bin"
+        try:
+            if not weights.is_file() or weights.stat().st_size < cls._MIN_WEIGHTS_BYTES:
+                return False
+        except OSError:
+            return False
+        return (path / "tokenizer.json").is_file()
+
     def model_dir(self) -> Optional[Path]:
-        """已下载的模型目录；未下载返回 None（不触发下载）。"""
+        """已下载**且完整**的模型目录；否则返回 None（不触发下载）。"""
         local = Path(self.repo)
-        if local.is_dir() and (local / "model.bin").is_file():
+        if local.is_dir() and self._looks_complete(local):
             return local
         try:
             from huggingface_hub import snapshot_download
 
-            path = snapshot_download(self.repo, local_files_only=True)
-            return Path(path)
+            path = Path(snapshot_download(self.repo, local_files_only=True))
         except Exception:
             return None
+        return path if self._looks_complete(path) else None
 
     @property
     def is_downloaded(self) -> bool:
