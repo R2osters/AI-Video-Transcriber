@@ -1204,41 +1204,32 @@ async def process_upload_task(
 
 
 def _local_chat_answer(transcript: str, question: str, top_k: int = 4) -> str:
+    """无 LLM 时的本地检索：BM25 找出转录中最相关的段落并原样引用。
+
+    这里**不生成**答案。没有模型就没有生成，把检索结果包装成一段像模像样的
+    回答，等于凭空捏造。返回原文片段，让用户自己判断。
     """
-    无 LLM 的本地问答回退：按问题词项与句子的重叠度打分，
-    返回最相关的转录片段（按原文顺序）。
-    """
-    # 去掉 Markdown 头部与时间戳行，仅保留正文
-    body_lines = [l.strip() for l in transcript.split("\n")
-                  if l.strip() and not l.startswith("#") and not l.startswith("**")]
-    sentences = []
-    for line in body_lines:
-        sentences.extend(s.strip() for s in re.split(r"(?<=[.!?。！？])\s+", line) if len(s.strip()) >= 15)
-    if not sentences:
-        return "Transcript vide — rien à chercher. / 转录为空。"
+    try:
+        from local_chat import search_passages
 
-    q_terms = {w for w in re.findall(r"\w+", question.lower()) if len(w) > 1}
-    if not q_terms:
-        return "Question trop courte pour une recherche locale."
+        hits = search_passages(transcript, question, top_k=top_k)
+    except Exception as e:
+        logger.warning(f"本地检索失败: {e}")
+        hits = []
 
-    scored = []
-    for i, s in enumerate(sentences):
-        s_terms = {w for w in re.findall(r"\w+", s.lower()) if len(w) > 1}
-        if not s_terms:
-            continue
-        overlap = len(q_terms & s_terms)
-        if overlap:
-            scored.append((overlap / len(q_terms), i, s))
+    if not hits:
+        return (
+            "Aucun passage de la transcription ne correspond à cette question.\n\n"
+            "*Recherche locale, sans IA. Pour une réponse rédigée, ajoutez une clé API "
+            "dans Paramètres.*"
+        )
 
-    if not scored:
-        return ("Aucun passage du transcript ne correspond à la question "
-                "(recherche locale sans IA — ajoutez une clé API dans Paramètres pour des réponses générées).")
-
-    top = sorted(scored, key=lambda x: -x[0])[:top_k]
-    top.sort(key=lambda x: x[1])
-    excerpts = "\n\n".join(f"> {s}" for _, _, s in top)
-    return (f"**Passages du transcript les plus pertinents** (mode local, sans clé API) :\n\n{excerpts}\n\n"
-            "*Pour des réponses rédigées par IA, renseignez une clé API dans Paramètres.*")
+    excerpts = "\n\n".join(f"> {h['text']}" for h in hits)
+    return (
+        f"**Passages les plus pertinents de la transcription** :\n\n{excerpts}\n\n"
+        "*Recherche locale, sans IA : ces extraits sont cités tels quels, ils ne sont "
+        "pas une réponse rédigée. Ajoutez une clé API dans Paramètres pour une synthèse.*"
+    )
 
 
 @app.post("/api/chat")
@@ -1321,6 +1312,49 @@ async def chat_with_transcript(
         # API 失败（无效 Key、配额…）→ 本地检索回退而不是报错
         local = _local_chat_answer(transcript, question)
         return {"answer": f"{local}\n\n*(API indisponible : {e})*", "local": True}
+
+
+# ── 本地翻译引擎 ─────────────────────────────────────────────────────
+# 模型 646 MB，下载**只能由用户在界面上点出来**，绝不在一次转录里悄悄发生。
+
+_translate_download_thread: Optional[threading.Thread] = None
+
+
+@app.get("/api/translate/status")
+async def translate_status():
+    """本地翻译模型的状态与下载进度。"""
+    from local_translate import get_local_translator
+
+    status = get_local_translator().progress_snapshot()
+    status["downloading"] = bool(
+        _translate_download_thread and _translate_download_thread.is_alive()
+    )
+    return status
+
+
+@app.post("/api/translate/download")
+async def translate_download():
+    """开始下载本地翻译模型（幂等；已在下载或已就绪时直接返回状态）。"""
+    global _translate_download_thread
+    from local_translate import get_local_translator
+
+    engine = get_local_translator()
+    if engine.is_downloaded:
+        return {"started": False, "reason": "already_downloaded", **engine.progress_snapshot()}
+    if _translate_download_thread and _translate_download_thread.is_alive():
+        return {"started": False, "reason": "already_downloading", **engine.progress_snapshot()}
+
+    def _run():
+        try:
+            engine.load()          # 下载后顺带加载，首次翻译就不用再等
+        except Exception as e:
+            logger.error(f"翻译模型准备失败: {e}")
+
+    _translate_download_thread = threading.Thread(
+        target=_run, name="translate-model-download", daemon=True
+    )
+    _translate_download_thread.start()
+    return {"started": True, **engine.progress_snapshot()}
 
 
 # ── 转录库（历史记录）────────────────────────────────────────────────

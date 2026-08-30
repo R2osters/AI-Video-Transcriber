@@ -82,7 +82,7 @@ class App {
       b.classList.toggle('active', b.dataset.view === key));
     $('sidebar').classList.remove('open');
     if (name === 'history') this._renderHistory();
-    if (name === 'settings') this._refreshDisk();
+    if (name === 'settings') { this._refreshDisk(); this._refreshEngine(); }
   }
 
   /* ── Bindings ─────────────────────────────────────────── */
@@ -155,6 +155,7 @@ class App {
 
     /* Espace disque */
     $('freeSpaceBtn').addEventListener('click', () => this._freeSpace());
+    $('downloadEngineBtn').addEventListener('click', () => this._downloadEngine());
     $('openLibraryBtn').addEventListener('click', () => {
       if (window.avt && window.avt.openLibrary) window.avt.openLibrary();
     });
@@ -1494,6 +1495,75 @@ class App {
       this._renderDiskPanel();
       this._toast(`${this._fmtSize(res.freed)} libérés`);
     } catch (_) { this._toast('Libération impossible'); }
+  }
+
+  /* ── Moteur de traduction local ───────────────────────── */
+  async _refreshEngine() {
+    let s;
+    try { s = await (await fetch(`${API}/translate/status`)).json(); }
+    catch (_) { return; }
+    this._engine = s;
+
+    const dot = $('engineStatus').querySelector('.dot');
+    const txt = $('engineStatus').querySelector('.txt');
+    const btn = $('downloadEngineBtn');
+    const bar = $('engineBar');
+    const pct = s.ratio ? Math.round(s.ratio * 100) : 0;
+
+    if (s.downloading) {
+      txt.textContent = `téléchargement ${pct}%`;
+      dot.style.background = 'var(--muted)';
+      bar.classList.add('show');
+      bar.firstElementChild.style.width = `${pct}%`;
+      $('engineNote').textContent =
+        `${this._fmtSize(s.downloaded_bytes)} sur ${this._fmtSize(s.total_bytes)} · vous pouvez continuer à utiliser l'application`;
+      btn.disabled = true;
+      btn.textContent = 'Téléchargement en cours…';
+      // La fenêtre peut être réduite pendant 646 Mo : on pousse la progression
+      // sur l'icône de la barre des tâches quand l'application native l'expose.
+      if (window.avt && window.avt.setTaskbarProgress) window.avt.setTaskbarProgress(s.ratio || 0);
+      clearTimeout(this._engineTimer);
+      this._engineTimer = setTimeout(() => this._refreshEngine(), 1500);
+      return;
+    }
+
+    if (window.avt && window.avt.setTaskbarProgress) window.avt.setTaskbarProgress(-1);
+    bar.classList.remove('show');
+
+    if (s.is_downloaded) {
+      txt.textContent = s.is_loaded ? 'prêt' : 'installé';
+      dot.style.background = 'var(--accent)';
+      $('engineNote').textContent = 'La traduction fonctionne sans clé API ni connexion.';
+      btn.disabled = true;
+      btn.textContent = 'Modèle installé';
+    } else if (s.state === 'error') {
+      txt.textContent = 'échec';
+      dot.style.background = '#b4342a';
+      $('engineNote').textContent = `Téléchargement impossible : ${s.error || 'erreur inconnue'}`;
+      btn.disabled = false;
+      btn.textContent = 'Réessayer le téléchargement';
+    } else {
+      txt.textContent = 'non installé';
+      dot.style.background = 'var(--line)';
+      $('engineNote').textContent = 'Sans ce modèle, la traduction exige une clé API.';
+      btn.disabled = false;
+      btn.textContent = 'Télécharger le modèle (646 Mo)';
+    }
+  }
+
+  async _downloadEngine() {
+    const size = this._fmtSize((this._engine && this._engine.total_bytes) || 0) || '646 Mo';
+    const ok = confirm(
+      `Télécharger le modèle de traduction (${size}) ?\n\n`
+      + `Il est enregistré sur cet ordinateur une seule fois. Ensuite, la traduction `
+      + `fonctionne sans clé API et sans connexion.\n\n`
+      + `Vous pouvez continuer à utiliser l'application pendant le téléchargement.`
+    );
+    if (!ok) return;
+    try {
+      await fetch(`${API}/translate/download`, { method: 'POST' });
+      this._refreshEngine();
+    } catch (_) { this._toast('Téléchargement impossible'); }
   }
 
   /* Backend injoignable : on affiche l'ancien historique en lecture seule */
