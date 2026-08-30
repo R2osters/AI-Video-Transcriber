@@ -1,6 +1,6 @@
 {
   "name": "ai-video-transcriber-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI Video Transcriber - application de bureau (Electron + FastAPI)",
   "main": "main.js",
   "author": "Gédéon Compaore",
