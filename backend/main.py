@@ -13,6 +13,7 @@ import uuid
 import json
 import re
 import secrets
+import shutil
 import openai
 
 from video_processor import VideoProcessor
@@ -99,8 +100,44 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 TEMP_DIR = DATA_ROOT / "temp"
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
+# 用户可把转录库放到别的盘：系统盘往往先满，而这个库只增不减。
+# 选择记在 DATA_ROOT/config.json（很小，始终留在默认位置）。
+CONFIG_FILE = DATA_ROOT / "config.json"
+
+
+def load_app_config() -> dict:
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f) or {}
+    except Exception as e:
+        logger.warning(f"读取配置失败，使用默认值: {e}")
+    return {}
+
+
+def save_app_config(cfg: dict) -> None:
+    tmp = CONFIG_FILE.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    os.replace(str(tmp), str(CONFIG_FILE))
+
+
+def resolve_library_dir() -> Path:
+    """配置指定的库目录；未配置或不可用时回落到默认位置。"""
+    configured = (load_app_config().get("library_dir") or "").strip()
+    if configured:
+        path = Path(configured)
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        except OSError as e:
+            # 目标盘拔掉了也不能让程序起不来：回默认位置并说明原因
+            logger.error(f"配置的转录库目录不可用（{configured}），回落到默认位置: {e}")
+    return DATA_ROOT / "library"
+
+
 # 转录库：任务完成后产物从 temp 迁入此处长期保存
-LIBRARY_DIR = DATA_ROOT / "library"
+LIBRARY_DIR = resolve_library_dir()
 library_store = LibraryStore(LIBRARY_DIR)
 try:
     # 磁盘为准：补录索引里缺失的记录，剔除目录已消失的行
@@ -1360,6 +1397,134 @@ async def translate_download():
 # ── 转录库（历史记录）────────────────────────────────────────────────
 # 路由顺序有讲究：/api/library/stats 等固定路径必须声明在 /api/library/{entry_id}
 # 之前，否则会被当成 entry_id 捕获。
+
+
+_relocation: dict = {"state": "idle", "copied_bytes": 0, "total_bytes": 0, "target": "", "error": None}
+_relocation_lock = threading.Lock()
+
+
+def _dir_bytes(path: Path) -> int:
+    total = 0
+    for p in path.rglob("*"):
+        try:
+            if p.is_file():
+                total += p.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
+def _relocate_library(target: Path) -> None:
+    """把整个库搬到 target。
+
+    顺序是**先复制、校验、切换，最后才删原件**。这是用户的全部转录和原始音频，
+    中途断电也不能出现两边都没有的瞬间。
+    """
+    global library_store, LIBRARY_DIR
+    source = LIBRARY_DIR
+    try:
+        _relocation.update({"state": "copying", "copied_bytes": 0,
+                            "total_bytes": _dir_bytes(source), "target": str(target), "error": None})
+        target.mkdir(parents=True, exist_ok=True)
+
+        with _relocation_lock:
+            library_store.close()          # 关掉 SQLite，避免复制到写了一半的索引
+
+        for item in source.rglob("*"):
+            rel = item.relative_to(source)
+            dest = target / rel
+            if item.is_dir():
+                dest.mkdir(parents=True, exist_ok=True)
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(item), str(dest))
+            try:
+                _relocation["copied_bytes"] += dest.stat().st_size
+            except OSError:
+                pass
+
+        # 校验：条数对得上才认为搬家成功
+        moved_store = LibraryStore(target)
+        moved_store.reindex()
+        moved_count = moved_store.list(limit=1)[1]
+        old_store = LibraryStore(source)
+        old_count = old_store.list(limit=1)[1]
+        old_store.close()
+        if moved_count < old_count:
+            moved_store.close()
+            raise RuntimeError(f"复制不完整：原 {old_count} 条，新 {moved_count} 条")
+
+        library_store = moved_store
+        LIBRARY_DIR = target
+        cfg = load_app_config()
+        cfg["library_dir"] = str(target)
+        save_app_config(cfg)
+
+        shutil.rmtree(str(source), ignore_errors=True)   # 确认无误后才删
+        _relocation.update({"state": "done"})
+        logger.info(f"转录库已迁移到 {target}")
+    except Exception as e:
+        logger.error(f"转录库迁移失败: {e}")
+        # 失败时把原库重新打开，用户的数据一直在原处，没有丢
+        try:
+            library_store = LibraryStore(source)
+        except Exception:
+            pass
+        _relocation.update({"state": "error", "error": str(e)})
+
+
+@app.get("/api/library/location")
+async def library_location():
+    """当前库位置与所在磁盘的剩余空间。"""
+    usage = shutil.disk_usage(str(LIBRARY_DIR)) if LIBRARY_DIR.exists() else None
+    return {
+        "path": str(LIBRARY_DIR),
+        "default_path": str(DATA_ROOT / "library"),
+        "is_default": LIBRARY_DIR == DATA_ROOT / "library",
+        "free_bytes": usage.free if usage else None,
+        "total_bytes": usage.total if usage else None,
+        "relocation": dict(_relocation),
+    }
+
+
+@app.post("/api/library/location")
+async def set_library_location(payload: dict = Body(...)):
+    """更换库位置并搬迁内容。空路径表示恢复默认位置。"""
+    if _relocation.get("state") == "copying":
+        raise HTTPException(status_code=409, detail="迁移正在进行中")
+
+    raw = (payload.get("path") or "").strip()
+    target = (DATA_ROOT / "library") if not raw else Path(raw).expanduser()
+    try:
+        target = target.resolve()
+    except OSError as e:
+        raise HTTPException(status_code=400, detail=f"路径无效: {e}")
+
+    if target == LIBRARY_DIR.resolve():
+        return {"started": False, "reason": "same_path", "path": str(LIBRARY_DIR)}
+    # 目标不能落在当前库里面，否则边复制边被自己吞掉
+    if str(target).startswith(str(LIBRARY_DIR.resolve()) + os.sep):
+        raise HTTPException(status_code=400, detail="目标目录不能位于当前库内部")
+
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        probe = target / ".avt-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as e:
+        raise HTTPException(status_code=400, detail=f"目标目录不可写: {e}")
+
+    needed = _dir_bytes(LIBRARY_DIR)
+    free = shutil.disk_usage(str(target)).free
+    if free < needed * 1.1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"目标磁盘空间不足：需要约 {needed // (1024*1024)} MB，可用 {free // (1024*1024)} MB",
+        )
+
+    threading.Thread(target=_relocate_library, args=(target,), daemon=True,
+                     name="library-relocate").start()
+    return {"started": True, "target": str(target), "total_bytes": needed}
 
 
 @app.get("/api/library/stats")

@@ -82,7 +82,7 @@ class App {
       b.classList.toggle('active', b.dataset.view === key));
     $('sidebar').classList.remove('open');
     if (name === 'history') this._renderHistory();
-    if (name === 'settings') { this._refreshDisk(); this._refreshEngine(); }
+    if (name === 'settings') { this._refreshDisk(); this._refreshEngine(); this._refreshLocation(); }
   }
 
   /* ── Bindings ─────────────────────────────────────────── */
@@ -156,6 +156,8 @@ class App {
     /* Espace disque */
     $('freeSpaceBtn').addEventListener('click', () => this._freeSpace());
     $('downloadEngineBtn').addEventListener('click', () => this._downloadEngine());
+    $('relocateBtn').addEventListener('click', () => this._relocate());
+    $('resetLocationBtn').addEventListener('click', () => this._relocate(''));
     $('openLibraryBtn').addEventListener('click', () => {
       if (window.avt && window.avt.openLibrary) window.avt.openLibrary();
     });
@@ -1495,6 +1497,73 @@ class App {
       this._renderDiskPanel();
       this._toast(`${this._fmtSize(res.freed)} libérés`);
     } catch (_) { this._toast('Libération impossible'); }
+  }
+
+  /* ── Emplacement de la bibliothèque ───────────────────── */
+  async _refreshLocation() {
+    let loc;
+    try { loc = await (await fetch(`${API}/library/location`)).json(); }
+    catch (_) { return; }
+    this._location = loc;
+
+    $('diskPath').textContent = loc.path;
+    if (!$('libraryPath').matches(':focus')) $('libraryPath').value = '';
+    $('libraryPath').placeholder = loc.is_default ? 'D:\\mes-transcriptions' : loc.default_path;
+    $('resetLocationBtn').style.display = loc.is_default ? 'none' : '';
+
+    const free = $('diskFree');
+    if (loc.free_bytes != null) {
+      const share = loc.total_bytes ? loc.free_bytes / loc.total_bytes : 1;
+      free.textContent = `${this._fmtSize(loc.free_bytes)} libres sur ce disque`;
+      // Rien n'est purgé automatiquement : un disque qui se remplit doit se voir
+      free.classList.toggle('low', loc.free_bytes < 2e9 || share < 0.03);
+      if (free.classList.contains('low')) {
+        free.textContent += ' — déplacez la bibliothèque sur un autre disque';
+      }
+    } else free.textContent = '';
+
+    const r = loc.relocation || {};
+    const bar = $('relocateBar');
+    if (r.state === 'copying') {
+      const ratio = r.total_bytes ? r.copied_bytes / r.total_bytes : 0;
+      bar.classList.add('show');
+      bar.firstElementChild.style.width = `${Math.round(ratio * 100)}%`;
+      $('relocateNote').textContent =
+        `Déplacement vers ${r.target} — ${this._fmtSize(r.copied_bytes)} sur ${this._fmtSize(r.total_bytes)}`;
+      $('relocateBtn').disabled = true;
+      clearTimeout(this._locTimer);
+      this._locTimer = setTimeout(() => this._refreshLocation(), 1200);
+    } else {
+      bar.classList.remove('show');
+      $('relocateBtn').disabled = false;
+      if (r.state === 'error') {
+        $('relocateNote').textContent = `Déplacement échoué : ${r.error}. Vos transcriptions sont restées en place.`;
+      } else if (r.state === 'done') {
+        $('relocateNote').textContent = 'Déplacement terminé.';
+      } else $('relocateNote').textContent = '';
+    }
+  }
+
+  async _relocate(path) {
+    const loc = this._location || {};
+    const target = path !== undefined ? path : $('libraryPath').value.trim();
+    if (path === undefined && !target) { this._toast('Indiquez un dossier de destination'); return; }
+
+    const size = this._fmtSize((this._libStats && this._libStats.bytes) || 0);
+    const dest = target || loc.default_path;
+    if (!confirm(
+      `Déplacer la bibliothèque vers :\n${dest}\n\n`
+      + `${size ? size + ' ' : ''}de transcriptions et d'audio vont être copiés, vérifiés, `
+      + `puis supprimés de l'ancien emplacement.\n\n`
+      + `Rien n'est effacé avant que la copie ne soit vérifiée.`
+    )) return;
+
+    try {
+      const r = await fetch(`${API}/library/location`, this._libJson('POST', { path: target }));
+      const data = await r.json();
+      if (!r.ok) { this._toast(data.detail || 'Déplacement impossible'); return; }
+      this._refreshLocation();
+    } catch (_) { this._toast('Déplacement impossible'); }
   }
 
   /* ── Moteur de traduction local ───────────────────────── */

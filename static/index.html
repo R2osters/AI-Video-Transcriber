@@ -479,6 +479,10 @@
       background: var(--night); transition: width .4s ease;
     }
     .engine-note { font-size: 11px; color: var(--muted); min-height: 14px; }
+    .disk-free { font-size: 10.5px; color: var(--muted); }
+    .disk-free.low { color: #b4342a; font-weight: 600; }
+    .relocate { display: flex; gap: 10px; align-items: center; }
+    .relocate .set-input { flex: 1; min-width: 0; }
     .disk-summary { font-size: 14px; color: var(--ink); }
     .disk-path {
       font-family: var(--mono); font-size: 10.5px; color: var(--faint);
@@ -1070,8 +1074,17 @@
           Rien n'est supprimé automatiquement : ni purge par ancienneté, ni quota.
           En échange votre historique grossit — comptez environ 1 Mo par minute d'audio conservé.
         </div>
+        <div class="disk-free mono" id="diskFree"></div>
+        <div class="relocate" id="relocateRow">
+          <input type="text" id="libraryPath" class="set-input" spellcheck="false"
+                 placeholder="D:\mes-transcriptions" autocomplete="off">
+          <button class="btn-secondary" id="relocateBtn">Déplacer</button>
+        </div>
+        <div class="engine-bar" id="relocateBar"><span></span></div>
+        <div class="engine-note mono" id="relocateNote"></div>
         <div class="set-actions">
           <button class="btn-secondary" id="freeSpaceBtn">Libérer de l'espace</button>
+          <button class="btn-secondary" id="resetLocationBtn">Emplacement par défaut</button>
         </div>
       </div>
 
