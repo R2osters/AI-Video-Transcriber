@@ -164,8 +164,10 @@ function engineStatus() {
 
 function createSplash() {
   splashWindow = new BrowserWindow({
-    width: 460,
-    height: 300,
+    // Assez haut pour la charte de l'app : bloc marque + égaliseur + message
+    // sur deux lignes + bouton + mention. À 300 px le contenu était rogné.
+    width: 520,
+    height: 400,
     frame: false,
     resizable: false,
     show: true,
