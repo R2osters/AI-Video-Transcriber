@@ -1254,7 +1254,7 @@ class App {
     localStorage.setItem('vt_history_imported', '1');
     localStorage.removeItem('vt_history');
     if (res.imported) {
-      this._toast(`${res.imported} transcription${res.imported > 1 ? 's' : ''} reprise${res.imported > 1 ? 's' : ''} dans la bibliothèque`);
+      this._toast(`${res.imported} transcription${res.imported > 1 ? 's' : ''} reprise${res.imported > 1 ? 's' : ''} dans votre historique`);
     }
   }
 
@@ -1471,7 +1471,7 @@ class App {
     $('diskSummary').textContent = s.count
       ? `${s.count} transcription${s.count > 1 ? 's' : ''} · ${this._fmtSize(s.bytes)} au total`
         + (s.media_bytes ? ` · dont ${this._fmtSize(s.media_bytes)} de médias` : '')
-      : 'Bibliothèque vide';
+      : 'Historique vide';
     $('diskPath').textContent = s.root || '';
     // Bouton natif : présent uniquement dans l'application installée
     $('openLibraryBtn').style.display = (window.avt && window.avt.openLibrary) ? '' : 'none';
