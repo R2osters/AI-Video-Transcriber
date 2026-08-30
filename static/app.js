@@ -58,6 +58,7 @@ class App {
       b.classList.toggle('active', b.dataset.view === key));
     $('sidebar').classList.remove('open');
     if (name === 'history') this._renderHistory();
+    if (name === 'settings') this._refreshDisk();
   }
 
   /* ── Bindings ─────────────────────────────────────────── */
@@ -126,6 +127,12 @@ class App {
         this.showView('history');
         $('histSearch').focus();
       }
+    });
+
+    /* Espace disque */
+    $('freeSpaceBtn').addEventListener('click', () => this._freeSpace());
+    $('openLibraryBtn').addEventListener('click', () => {
+      if (window.avt && window.avt.openLibrary) window.avt.openLibrary();
     });
 
     /* Paramètres */
@@ -495,8 +502,12 @@ class App {
     const file = this.result && this.result[kind];
     if (!file) return;
     const a = document.createElement('a');
-    a.href = `${API}/download/${encodeURIComponent(file)}`;
-    a.download = file;
+    // Entrée issue de la bibliothèque : on adresse le produit par son type,
+    // sans dépendre du nom de fichier d'origine.
+    a.href = this.result.assetBase
+      ? `${this.result.assetBase}/${kind}?download=true`
+      : `${API}/download/${encodeURIComponent(file)}`;
+    a.download = this.result.assetBase ? `${this.result.title || 'sous-titres'}.${kind}` : file;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -962,7 +973,9 @@ class App {
   _onCompleted(task) {
     const elapsed = this.job ? Date.now() - this.job.startTime : 0;
     const entry = this._buildEntry(task, elapsed);
-    this._pushHistory(entry);
+    // Le backend a déjà archivé la tâche : rien à écrire côté navigateur,
+    // on rafraîchit juste la liste pour que la nouvelle entrée y figure.
+    this._renderHistory();
 
     const btn = $('seeResultsBtn');
     btn.classList.add('ready');
@@ -1046,7 +1059,7 @@ class App {
     if (entry.media) {
       const isAudio = entry.media.kind === 'audio';
       const el = document.createElement(isAudio ? 'audio' : 'video');
-      el.src = `${API}/media/${encodeURIComponent(entry.media.file)}`;
+      el.src = entry.media.url || `${API}/media/${encodeURIComponent(entry.media.file)}`;
       el.controls = true;
       el.preload = 'metadata';
       el.addEventListener('error', () => { block.style.display = 'none'; });
@@ -1122,7 +1135,9 @@ class App {
     const m = this.result?.media;
     if (!m) { this._toast('Aucun média disponible'); return; }
     const a = document.createElement('a');
-    a.href = `${API}/download/${encodeURIComponent(m.file)}?name=${encodeURIComponent(m.name)}`;
+    a.href = m.url
+      ? `${m.url}?download=true`
+      : `${API}/download/${encodeURIComponent(m.file)}?name=${encodeURIComponent(m.name)}`;
     a.download = m.name;
     document.body.appendChild(a);
     a.click();
@@ -1137,68 +1152,349 @@ class App {
     return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
   }
 
-  /* ── Historique (localStorage) ────────────────────────── */
-  _history() {
+  /* ── Bibliothèque : accès API ─────────────────────────── */
+  async _lib(path, opts) {
+    const r = await fetch(`${API}/library${path}`, opts);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  _libJson(method, body) {
+    return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  }
+
+  /* Enregistrement de la bibliothèque → forme interne attendue par _renderResult */
+  _entryFromApi(rec) {
+    const src = (rec.lang_src || '').toUpperCase();
+    const dst = (rec.lang_dst || '').toUpperCase();
+    const assets = rec.assets || {};
+    const sources = rec.asset_sources || {};
+    const assetBase = `${API}/library/${encodeURIComponent(rec.id)}/asset`;
+    const mediaKind = assets.video ? 'video' : (assets.audio ? 'audio' : null);
+    return {
+      id: rec.id,
+      date: new Date((rec.created_at || 0) * 1000).toISOString(),
+      title: rec.title || 'Sans titre',
+      platform: rec.platform || '',
+      langPair: (src && dst && src !== dst) ? `${src}→${dst}` : (src || '—'),
+      model: rec.model || '',
+      elapsedMs: rec.elapsed_ms || 0,
+      favorite: Boolean(rec.favorite),
+      noSpeech: Boolean(rec.no_speech),
+      script: rec.script || '',
+      summary: rec.summary || '',
+      translation: rec.translation || '',
+      showTranslation: Boolean(rec.translation) && src && dst && src !== dst && !rec.no_speech,
+      assetBase,
+      media: mediaKind ? {
+        file: sources[mediaKind] || '',
+        name: rec.media_download_name || rec.title || 'media',
+        kind: mediaKind,
+        size: rec.media_size_bytes || 0,
+        url: `${assetBase}/${mediaKind}`,
+      } : null,
+      srt: assets.srt ? 'srt' : null,
+      vtt: assets.vtt ? 'vtt' : null,
+    };
+  }
+
+  /* ── Ancien historique navigateur : repli + migration ──── */
+  _legacyHistory() {
     try { return JSON.parse(localStorage.getItem('vt_history') || '[]'); }
     catch (_) { return []; }
   }
 
-  _pushHistory(entry) {
-    let list = this._history();
-    list.unshift(entry);
-    if (list.length > 60) list = list.slice(0, 60);
-    while (list.length) {
-      try { localStorage.setItem('vt_history', JSON.stringify(list)); break; }
-      catch (_) { list.pop(); }   // quota dépassé : on abandonne les plus anciennes
+  /* Reprise unique de l'ancien historique localStorage vers la bibliothèque.
+     Le drapeau évite les doublons ; vt_history n'est effacé qu'après succès. */
+  async _migrateLegacyHistory() {
+    if (localStorage.getItem('vt_history_imported')) return;
+    const legacy = this._legacyHistory();
+    if (!legacy.length) { localStorage.setItem('vt_history_imported', '1'); return; }
+
+    const entries = legacy.map(e => {
+      const [src, dst] = String(e.langPair || '').toLowerCase().split('→');
+      const ts = Date.parse(e.date || '');
+      return {
+        id: /^[A-Za-z0-9_-]{1,64}$/.test(e.id || '') ? e.id : undefined,
+        title: e.title || 'Sans titre',
+        created_at: Number.isFinite(ts) ? ts / 1000 : undefined,
+        platform: e.platform || '',
+        lang_src: src || '', lang_dst: dst || '',
+        model: e.model || '',
+        script: e.script || '', summary: e.summary || '', translation: e.translation || '',
+        no_speech: Boolean(e.noSpeech),
+      };
+    });
+
+    const res = await this._lib('/import', this._libJson('POST', { entries }));
+    localStorage.setItem('vt_history_imported', '1');
+    localStorage.removeItem('vt_history');
+    if (res.imported) {
+      this._toast(`${res.imported} transcription${res.imported > 1 ? 's' : ''} reprise${res.imported > 1 ? 's' : ''} dans la bibliothèque`);
     }
   }
 
-  _renderHistory() {
+  /* ── Rendu de la bibliothèque ─────────────────────────── */
+  async _renderHistory({ append = false } = {}) {
+    const listEl = $('histList');
+    const q = $('histSearch').value.trim();
+
+    if (!append) {
+      this._histOffset = 0;
+      this._histSeq = (this._histSeq || 0) + 1;
+      this._histLastLabel = null;   // sinon le 1er groupe n'est pas recréé après vidage
+      listEl.innerHTML = '';
+    }
+    const seq = this._histSeq;
+
+    let data;
+    try {
+      await this._migrateLegacyHistory();
+      data = await this._lib(`?q=${encodeURIComponent(q)}&limit=50&offset=${this._histOffset || 0}`);
+    } catch (_) {
+      // Backend injoignable (page ouverte sans serveur) : repli lecture seule
+      this._renderLegacyFallback();
+      return;
+    }
+    if (seq !== this._histSeq) return;   // une frappe plus récente a relancé le rendu
+
+    this._histOffset = (this._histOffset || 0) + data.items.length;
+    this._histTotal = data.total;
+    if (!append) $('histEmpty').classList.toggle('show', data.total === 0);
+
+    this._appendHistoryRows(listEl, data.items);
+    this._renderHistoryFoot();
+  }
+
+  _appendHistoryRows(listEl, items) {
+    let group = listEl.querySelector('.hist-group:last-of-type');
+    let lastLabel = this._histLastLabel;
+
+    for (const item of items) {
+      const label = this._groupKey(new Date((item.created_at || 0) * 1000));
+      if (label !== lastLabel || !group) {
+        const head = document.createElement('div');
+        head.className = 'hist-group-label';
+        head.innerHTML = `<span class="dot"></span><span class="txt"></span>`;
+        head.querySelector('.txt').textContent = label;
+        listEl.appendChild(head);
+        group = document.createElement('div');
+        group.className = 'hist-group';
+        listEl.appendChild(group);
+        lastLabel = label;
+      }
+      group.appendChild(this._historyRow(item));
+    }
+    this._histLastLabel = lastLabel;
+
+    const more = listEl.querySelector('.hist-more-row');
+    if (more) more.remove();
+    if (this._histOffset < this._histTotal) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'hist-more-row';
+      btn.textContent = `Afficher plus (${this._histTotal - this._histOffset} restantes)`;
+      btn.addEventListener('click', () => this._renderHistory({ append: true }));
+      listEl.appendChild(btn);
+    }
+  }
+
+  _historyRow(item) {
+    const src = (item.lang_src || '').toUpperCase();
+    const dst = (item.lang_dst || '').toUpperCase();
+    const langPair = (src && dst && src !== dst) ? `${src}→${dst}` : (src || '');
+
+    const row = document.createElement('div');
+    row.className = 'hist-entry';
+    row.innerHTML = `
+      <button type="button" class="hist-open">
+        <span class="title"></span><span class="meta"></span>
+      </button>
+      <button type="button" class="hist-star" aria-pressed="false" title="Favori">★</button>
+      <button type="button" class="hist-more" title="Plus d'actions">···</button>`;
+
+    const titleEl = row.querySelector('.title');
+    titleEl.textContent = item.title;
+    row.querySelector('.meta').textContent = [item.platform, langPair].filter(Boolean).join(' · ');
+
+    row.querySelector('.hist-open').addEventListener('click', () => this._openEntry(item.id));
+
+    const star = row.querySelector('.hist-star');
+    star.classList.toggle('on', item.favorite);
+    star.setAttribute('aria-pressed', String(Boolean(item.favorite)));
+    star.addEventListener('click', async () => {
+      const next = !star.classList.contains('on');
+      star.classList.toggle('on', next);
+      star.setAttribute('aria-pressed', String(next));
+      try {
+        await this._lib(`/${encodeURIComponent(item.id)}`, this._libJson('PATCH', { favorite: next }));
+        item.favorite = next;
+      } catch (_) {
+        star.classList.toggle('on', !next);   // le serveur a refusé : on remet l'état visuel
+        this._toast('Impossible de modifier le favori');
+      }
+    });
+
+    row.querySelector('.hist-more').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openRowMenu(e.currentTarget, item, row, titleEl);
+    });
+    return row;
+  }
+
+  _openRowMenu(anchor, item, row, titleEl) {
+    document.querySelectorAll('.hist-menu').forEach(m => m.remove());
+    const menu = document.createElement('div');
+    menu.className = 'hist-menu';
+    menu.innerHTML = `
+      <button type="button" data-act="rename">Renommer</button>
+      <button type="button" data-act="delete">Supprimer</button>`;
+    const r = anchor.getBoundingClientRect();
+    menu.style.top = `${r.bottom + 4}px`;
+    menu.style.left = `${Math.max(8, r.right - 150)}px`;
+    document.body.appendChild(menu);
+
+    const close = () => { menu.remove(); document.removeEventListener('click', close); };
+    setTimeout(() => document.addEventListener('click', close), 0);
+
+    menu.querySelector('[data-act="rename"]').addEventListener('click', () => {
+      close();
+      this._renameInline(item, titleEl);
+    });
+    menu.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+      close();
+      // confirm() plutôt que prompt() : prompt n'existe pas dans Electron
+      if (!confirm(`Supprimer « ${item.title} » ?\n\nLa transcription, ses sous-titres et son audio seront effacés définitivement.`)) return;
+      try {
+        await this._lib(`/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+        row.remove();
+        if (this.result && this.result.id === item.id) this.result = null;
+        this._renderHistory();
+      } catch (_) { this._toast('Suppression impossible'); }
+    });
+  }
+
+  /* Renommage sur place : le titre devient un champ, Entrée valide, Échap annule */
+  _renameInline(item, titleEl) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'hist-rename';
+    input.value = item.title;
+    titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const restore = (title) => {
+      if (done) return;
+      done = true;
+      titleEl.textContent = title;
+      input.replaceWith(titleEl);
+    };
+    const commit = async () => {
+      const next = input.value.trim();
+      if (!next || next === item.title) return restore(item.title);
+      restore(next);
+      try {
+        await this._lib(`/${encodeURIComponent(item.id)}`, this._libJson('PATCH', { title: next }));
+        item.title = next;
+        if (this.result && this.result.id === item.id) {
+          this.result.title = next;
+          $('resTitle').textContent = next;
+        }
+      } catch (_) {
+        titleEl.textContent = item.title;
+        this._toast('Renommage impossible');
+      }
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      if (e.key === 'Escape') { e.preventDefault(); restore(item.title); }
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  async _openEntry(id) {
+    try {
+      const rec = await this._lib(`/${encodeURIComponent(id)}`);
+      this._renderResult(this._entryFromApi(rec));
+      this.showView('results', { navKey: 'history' });
+    } catch (_) { this._toast('Impossible d’ouvrir cette transcription'); }
+  }
+
+  async _renderHistoryFoot() {
+    try {
+      const s = await this._lib('/stats');
+      this._libStats = s;
+      $('histFoot').textContent = s.count
+        ? `${s.count} transcription${s.count > 1 ? 's' : ''} · ${this._fmtSize(s.bytes)} sur disque`
+        : '';
+      this._renderDiskPanel();
+    } catch (_) { $('histFoot').textContent = ''; }
+  }
+
+  /* ── Espace disque (Paramètres) ───────────────────────── */
+  async _refreshDisk() {
+    try {
+      this._libStats = await this._lib('/stats');
+      this._renderDiskPanel();
+    } catch (_) { /* backend absent : le panneau garde sa valeur précédente */ }
+  }
+
+  _renderDiskPanel() {
+    const s = this._libStats;
+    if (!s || !$('diskSummary')) return;
+    $('diskSummary').textContent = s.count
+      ? `${s.count} transcription${s.count > 1 ? 's' : ''} · ${this._fmtSize(s.bytes)} au total`
+        + (s.media_bytes ? ` · dont ${this._fmtSize(s.media_bytes)} de médias` : '')
+      : 'Bibliothèque vide';
+    $('diskPath').textContent = s.root || '';
+    // Bouton natif : présent uniquement dans l'application installée
+    $('openLibraryBtn').style.display = (window.avt && window.avt.openLibrary) ? '' : 'none';
+  }
+
+  /* Libération d'espace : strictement manuelle, et on annonce le volume avant d'agir */
+  async _freeSpace() {
+    try {
+      const { candidates } = await this._lib('/free-space', this._libJson('POST', {}));
+      if (!candidates.length) { this._toast('Aucun média à libérer'); return; }
+      const bytes = candidates.reduce((n, c) => n + (c.size_bytes || 0), 0);
+      const ok = confirm(
+        `Libérer environ ${this._fmtSize(bytes)} ?\n\n`
+        + `${candidates.length} transcription${candidates.length > 1 ? 's perdront' : ' perdra'} son fichier audio.\n`
+        + `Les textes, résumés et sous-titres sont conservés, et les favoris ne sont pas touchés.`
+      );
+      if (!ok) return;
+      const res = await this._lib('/free-space', this._libJson('POST', { ids: candidates.map(c => c.id) }));
+      this._libStats = res.stats;
+      this._renderDiskPanel();
+      this._toast(`${this._fmtSize(res.freed)} libérés`);
+    } catch (_) { this._toast('Libération impossible'); }
+  }
+
+  /* Backend injoignable : on affiche l'ancien historique en lecture seule */
+  _renderLegacyFallback() {
     const listEl = $('histList');
     const q = $('histSearch').value.trim().toLowerCase();
-    let entries = this._history();
+    let entries = this._legacyHistory();
     if (q) entries = entries.filter(e => (e.title || '').toLowerCase().includes(q));
 
     listEl.innerHTML = '';
     $('histEmpty').classList.toggle('show', entries.length === 0);
-
-    const groups = new Map();
     for (const e of entries) {
-      const key = this._groupKey(new Date(e.date));
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(e);
+      const row = document.createElement('div');
+      row.className = 'hist-entry';
+      row.innerHTML = `<button type="button" class="hist-open">
+        <span class="title"></span><span class="meta"></span></button>`;
+      row.querySelector('.title').textContent = e.title;
+      row.querySelector('.meta').textContent = [e.platform, e.langPair].filter(Boolean).join(' · ');
+      row.querySelector('.hist-open').addEventListener('click', () => {
+        this._renderResult(e);
+        this.showView('results', { navKey: 'history' });
+      });
+      listEl.appendChild(row);
     }
-
-    for (const [label, items] of groups) {
-      const head = document.createElement('div');
-      head.className = 'hist-group-label';
-      head.innerHTML = `<span class="dot"></span><span class="txt"></span>`;
-      head.querySelector('.txt').textContent = label;
-      listEl.appendChild(head);
-
-      const group = document.createElement('div');
-      group.className = 'hist-group';
-      for (const e of items) {
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'hist-entry';
-        row.innerHTML = `<span class="title"></span><span class="meta"></span>`;
-        row.querySelector('.title').textContent = e.title;
-        row.querySelector('.meta').textContent = [e.platform, e.langPair].filter(Boolean).join(' · ');
-        row.addEventListener('click', () => {
-          this._renderResult(e);
-          this.showView('results', { navKey: 'history' });
-        });
-        group.appendChild(row);
-      }
-      listEl.appendChild(group);
-    }
-
-    const all = this._history();
-    const bytes = (localStorage.getItem('vt_history') || '').length;
-    $('histFoot').textContent = all.length
-      ? `${all.length} transcription${all.length > 1 ? 's' : ''} · ${this._fmtSize(bytes)} archivés`
-      : '';
+    $('histFoot').textContent = entries.length ? 'Application hors ligne — historique local en lecture seule' : '';
   }
 
   _groupKey(d) {

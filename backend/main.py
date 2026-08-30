@@ -418,6 +418,8 @@ def _archive_task_to_library(
         # 保留分段，日后可重新导出字幕而无需重跑 Whisper
         "segments": segments or [],
         "media_download_name": task.get("media_download_name") or "",
+        # 媒体体积单独留存：条目总大小含文本，前端展示播放器信息时需要精确值
+        "media_size_bytes": task.get("media_size_bytes") or 0,
     }
 
     try:
