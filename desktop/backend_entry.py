@@ -85,10 +85,17 @@ def selftest() -> int:
     """Vérifie que le bundle contient bien tout ce dont le runtime a besoin."""
     checks = []
 
-    def check(label, fn):
+    def check(label, fn, optional=False):
+        """optional=True : un module encore absent des sources est ignoré, mais
+        un module présent qui casse au chargement reste une erreur."""
         try:
             fn()
             checks.append((label, True, ""))
+        except ModuleNotFoundError as exc:
+            if optional:
+                checks.append((label, True, f"absent (ignoré) : {exc}"))
+            else:
+                checks.append((label, False, str(exc)))
         except Exception as exc:
             checks.append((label, False, str(exc)))
 
@@ -107,14 +114,18 @@ def selftest() -> int:
         from main import app  # noqa: F401
 
     check("sqlite3 (+WAL)", _sqlite)
-    check("backend.library", _library)
+    # library.py arrive avec la bibliothèque de transcriptions ; tant qu'il n'est
+    # pas mergé son absence n'est pas une erreur. S'il est là mais casse le
+    # chargement, « backend.main:app » le signalera de toute façon (main l'importe).
+    check("backend.library", _library, optional=True)
     check("backend.main:app", _app)
     check("faster_whisper", lambda: __import__("faster_whisper"))
     check("yt_dlp", lambda: __import__("yt_dlp"))
 
     ok = True
     for label, passed, detail in checks:
-        print(f"[{'OK ' if passed else 'ECHEC'}] {label}{'' if passed else ' -> ' + detail}")
+        suffix = f" -> {detail}" if detail else ""
+        print(f"[{'OK ' if passed else 'ECHEC'}] {label}{suffix}")
         ok = ok and passed
     return 0 if ok else 1
 
