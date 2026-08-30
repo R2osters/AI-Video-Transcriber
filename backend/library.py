@@ -33,6 +33,10 @@ ASSET_BASENAMES = {
     "srt": "subs",
     "vtt": "subs",
     "raw": "raw",
+    # 文本同时存在于 entry.json，这里保留成品文件是为了让前端的下载链接继续可用
+    "script": "transcript",
+    "summary": "summary",
+    "translation": "translation",
 }
 ASSET_KINDS = tuple(ASSET_BASENAMES)
 
@@ -64,6 +68,16 @@ CREATE TABLE IF NOT EXISTS entries (
 );
 CREATE INDEX IF NOT EXISTS idx_entries_created ON entries(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_entries_favorite ON entries(favorite, created_at DESC);
+
+-- 产物入库后原 temp 文件名 → 记录的映射。
+-- 旧接口 /api/media/{filename}、/api/download/{filename} 按 temp 文件名寻址，
+-- 入库即从 temp 移走，靠这张表继续解析，避免历史链接 404。
+CREATE TABLE IF NOT EXISTS asset_names (
+    filename TEXT PRIMARY KEY,
+    entry_id TEXT NOT NULL,
+    kind     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_asset_names_entry ON asset_names(entry_id);
 """
 
 _LIST_COLUMNS = (
@@ -177,6 +191,7 @@ class LibraryStore:
             target.mkdir(parents=True, exist_ok=True)
 
             stored_assets: Dict[str, str] = {}
+            source_names: Dict[str, str] = {}
             for kind, src in (assets or {}).items():
                 if kind not in ASSET_KINDS or not src:
                     continue
@@ -191,6 +206,7 @@ class LibraryStore:
                     else:
                         shutil.copy2(str(src), str(dest))
                     stored_assets[kind] = dest.name
+                    source_names[kind] = src.name
                 except OSError as e:
                     logger.warning(f"入库产物失败 {kind}: {e}")
 
@@ -198,7 +214,9 @@ class LibraryStore:
             record["id"] = eid
             record.setdefault("created_at", time.time())
             record["assets"] = stored_assets
+            record["asset_sources"] = source_names
             self._write_entry_json(target, record)
+            self._index_asset_names(eid, source_names)
 
             size_bytes = _dir_size(target)
             self._db.execute(
@@ -232,6 +250,27 @@ class LibraryStore:
             self._db.commit()
             logger.info(f"入库完成: {eid} ({size_bytes} 字节, 产物 {list(stored_assets)})")
             return self.get_meta(eid) or {}
+
+    def _index_asset_names(self, entry_id: str, source_names: Dict[str, str]) -> None:
+        """登记 temp 原文件名 → (记录, 产物类型)，供旧接口按文件名回落解析。"""
+        if not source_names:
+            return
+        with self._lock:
+            self._db.executemany(
+                "INSERT OR REPLACE INTO asset_names (filename, entry_id, kind) VALUES (?,?,?)",
+                [(name, entry_id, kind) for kind, name in source_names.items() if name],
+            )
+            self._db.commit()
+
+    def find_by_filename(self, filename: str) -> Optional[Tuple[str, str]]:
+        """按入库前的 temp 文件名查 (entry_id, kind)；未登记返回 None。"""
+        if not filename:
+            return None
+        with self._lock:
+            row = self._db.execute(
+                "SELECT entry_id, kind FROM asset_names WHERE filename = ?", (filename,)
+            ).fetchone()
+        return (row["entry_id"], row["kind"]) if row else None
 
     def _write_entry_json(self, target: Path, record: Dict[str, Any]) -> None:
         """原子写 entry.json（先写临时文件再替换，避免崩溃留下半截 JSON）。"""
@@ -380,6 +419,7 @@ class LibraryStore:
                 return False
             target = self._entry_dir(entry_id)
             self._db.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
+            self._db.execute("DELETE FROM asset_names WHERE entry_id = ?", (entry_id,))
             self._db.commit()
         try:
             shutil.rmtree(str(target), ignore_errors=True)
@@ -400,6 +440,7 @@ class LibraryStore:
                 return 0
 
             freed = 0
+            dropped_kinds = []
             for kind in list(kinds):
                 path = self.asset_path(entry_id, kind)
                 if path:
@@ -407,10 +448,16 @@ class LibraryStore:
                         freed += path.stat().st_size
                         path.unlink()
                         assets.pop(kind, None)
+                        dropped_kinds.append(kind)
                     except OSError as e:
                         logger.warning(f"删除产物失败 {entry_id}/{kind}: {e}")
             if not freed:
                 return 0
+            # 文件已不在，旧接口的文件名映射一并撤销，避免解析到空路径
+            self._db.executemany(
+                "DELETE FROM asset_names WHERE entry_id = ? AND kind = ?",
+                [(entry_id, k) for k in dropped_kinds],
+            )
 
             target = self._entry_dir(entry_id)
             self._db.execute(
@@ -534,11 +581,13 @@ class LibraryStore:
                 continue
             # 目录已在库内：只补索引行，不再搬动文件
             self._insert_existing(child.name, record, _dir_size(child))
+            self._index_asset_names(child.name, record.get("asset_sources") or {})
             added += 1
 
         for missing in known - on_disk:
             with self._lock:
                 self._db.execute("DELETE FROM entries WHERE id = ?", (missing,))
+                self._db.execute("DELETE FROM asset_names WHERE entry_id = ?", (missing,))
                 self._db.commit()
             dropped += 1
 

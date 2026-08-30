@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +29,7 @@ from pipeline import (
     txt_to_raw_transcript_markdown as _txt_to_raw_transcript_markdown,
 )
 from diarizer import Diarizer
+from library import LibraryStore
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -58,6 +59,15 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # 创建临时目录
 TEMP_DIR = DATA_ROOT / "temp"
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+# 转录库：任务完成后产物从 temp 迁入此处长期保存
+LIBRARY_DIR = DATA_ROOT / "library"
+library_store = LibraryStore(LIBRARY_DIR)
+try:
+    # 磁盘为准：补录索引里缺失的记录，剔除目录已消失的行
+    library_store.reindex()
+except Exception as e:
+    logger.warning(f"转录库索引重建失败（不影响转录）: {e}")
 
 # 初始化处理器
 video_processor = VideoProcessor()
@@ -174,9 +184,18 @@ def _resolve_temp_file(filename: str, allowed_ext: frozenset) -> Path:
     # 二次防御：即使扩展名校验通过，也确认最终路径没跳出 temp
     if file_path.parent.resolve() != TEMP_DIR.resolve():
         raise HTTPException(status_code=400, detail="文件名格式无效")
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="文件不存在")
-    return file_path
+    if file_path.exists():
+        return file_path
+
+    # temp 里没有 → 可能已迁入转录库（任务完成即搬走），按原文件名回落解析。
+    # 路径不由文件名拼接，而是查表拿到记录后由库自身校验，故不会绕过上面的防御。
+    located = library_store.find_by_filename(filename)
+    if located:
+        archived = library_store.asset_path(*located)
+        if archived is not None:
+            return archived
+
+    raise HTTPException(status_code=404, detail="文件不存在")
 
 
 def _safe_download_name(raw: str, expected_ext: str) -> Optional[str]:
@@ -324,6 +343,91 @@ async def _maybe_diarize(task_id: str, audio_path: str, segments, raw_script: st
     return segments, raw_script
 
 
+def _platform_from_url(url: str) -> str:
+    """从来源 URL 粗略识别平台名，仅用于列表展示。"""
+    if not url or not url.startswith("http"):
+        return "upload"
+    host = re.sub(r"^https?://(www\.)?", "", url).split("/")[0].lower()
+    known = {
+        "youtube.com": "youtube", "youtu.be": "youtube",
+        "bilibili.com": "bilibili", "b23.tv": "bilibili",
+        "vimeo.com": "vimeo", "twitter.com": "twitter", "x.com": "twitter",
+        "tiktok.com": "tiktok", "douyin.com": "douyin",
+    }
+    for domain, name in known.items():
+        if host == domain or host.endswith("." + domain):
+            return name
+    return host or "web"
+
+
+def _archive_task_to_library(
+    task_id: str,
+    segments: Optional[list] = None,
+    whisper_model: str = "",
+) -> None:
+    """任务完成后把产物从 temp 迁入转录库。
+
+    产物是**移动**而非复制：temp 随时可能被清空，迁走后旧的
+    /api/download/{filename}、/api/media/{filename} 链接靠库内的文件名映射继续解析。
+    失败绝不能影响任务本身——用户已经拿到结果，归档只是持久化。
+    """
+    task = tasks.get(task_id)
+    if not task:
+        return
+
+    def _temp(name: Optional[str]) -> Optional[Path]:
+        if not name:
+            return None
+        path = TEMP_DIR / Path(str(name)).name
+        return path if path.is_file() else None
+
+    assets: dict = {}
+    for kind, name in (
+        ("srt", task.get("srt_filename")),
+        ("vtt", task.get("vtt_filename")),
+        ("raw", task.get("raw_script_file")),
+        ("script", task.get("script_path")),
+        ("summary", task.get("summary_path")),
+        ("translation", task.get("translation_path")),
+    ):
+        path = _temp(name)
+        if path:
+            assets[kind] = path
+
+    media_name = task.get("media_filename")
+    media_path = _temp(media_name)
+    if media_path:
+        assets[_media_kind(media_path.suffix.lower())] = media_path
+
+    created_at = task.get("created_at") or time.time()
+    url = task.get("url") or ""
+    entry = {
+        "title": task.get("video_title") or "(untitled)",
+        "created_at": created_at,
+        "platform": _platform_from_url(url),
+        "source_url": url if url.startswith("http") else "",
+        "lang_src": task.get("detected_language") or "",
+        "lang_dst": task.get("summary_language") or "",
+        "model": task.get("whisper_model") or whisper_model or WHISPER_MODEL_DEFAULT,
+        "source_mode": task.get("source_mode") or "",
+        "elapsed_ms": int(max(0.0, time.time() - created_at) * 1000),
+        "no_speech": bool(task.get("no_speech")),
+        "script": task.get("script") or "",
+        "summary": task.get("summary") or "",
+        "translation": task.get("translation") or "",
+        # 保留分段，日后可重新导出字幕而无需重跑 Whisper
+        "segments": segments or [],
+        "media_download_name": task.get("media_download_name") or "",
+    }
+
+    try:
+        item = library_store.add(entry, assets=assets, entry_id=task_id)
+        tasks[task_id]["library_id"] = item.get("id") or task_id
+        save_tasks(tasks)
+    except Exception as e:
+        logger.error(f"归档到转录库失败（结果仍可用）: {e}")
+
+
 async def _run_post_extract_pipeline(
     task_id: str,
     raw_script: str,
@@ -410,6 +514,8 @@ async def _run_post_extract_pipeline(
 
         tasks[task_id].update(task_result)
         save_tasks(tasks)
+        # 广播前归档：先搬完文件，前端拿到结果时链接已能解析到库内
+        await asyncio.to_thread(_archive_task_to_library, task_id, segments)
         await broadcast_task_update(task_id, tasks[task_id])
 
         if dedup_url:
@@ -539,6 +645,8 @@ async def _run_post_extract_pipeline(
 
     tasks[task_id].update(task_result)
     save_tasks(tasks)
+    # 广播前归档：先搬完文件，前端拿到结果时链接已能解析到库内
+    await asyncio.to_thread(_archive_task_to_library, task_id, segments)
     logger.info(f"任务完成，准备广播最终状态: {task_id}")
     await broadcast_task_update(task_id, tasks[task_id])
     logger.info(f"最终状态已广播: {task_id}")
@@ -1156,9 +1264,125 @@ async def chat_with_transcript(
         return {"answer": f"{local}\n\n*(API indisponible : {e})*", "local": True}
 
 
+# ── 转录库（历史记录）────────────────────────────────────────────────
+# 路由顺序有讲究：/api/library/stats 等固定路径必须声明在 /api/library/{entry_id}
+# 之前，否则会被当成 entry_id 捕获。
+
+
+@app.get("/api/library/stats")
+async def library_stats():
+    """记录数与磁盘占用，供界面的“磁盘空间”面板展示。"""
+    return library_store.stats()
+
+
+@app.post("/api/library/import")
+async def library_import(payload: dict = Body(...)):
+    """从旧的 localStorage 历史一次性导入（产物文件已丢失，只搬文本）。"""
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=400, detail="entries 必须是数组")
+    imported = await asyncio.to_thread(library_store.import_entries, entries)
+    return {"imported": imported, "total": library_store.stats()["count"]}
+
+
+@app.post("/api/library/free-space")
+async def library_free_space(payload: dict = Body(default={})):
+    """按 id 列表丢弃媒体文件、保留文本。
+
+    只在用户明确点击“释放空间”时调用：本产品不做任何自动清理。
+    不传 ids 时仅返回候选列表，不删除任何内容。
+    """
+    ids = payload.get("ids")
+    if not isinstance(ids, list) or not ids:
+        candidates = library_store.purge_candidates(
+            older_than_days=float(payload.get("older_than_days") or 0),
+            keep_favorites=payload.get("keep_favorites", True),
+        )
+        return {"candidates": candidates, "freed": 0}
+
+    freed = 0
+    for entry_id in ids:
+        if isinstance(entry_id, str):
+            freed += await asyncio.to_thread(library_store.drop_assets, entry_id)
+    return {"freed": freed, "stats": library_store.stats()}
+
+
+@app.get("/api/library")
+async def library_list(
+    q: str = "",
+    limit: int = 50,
+    offset: int = 0,
+    favorites_only: bool = False,
+):
+    """分页列出记录（仅元数据，不含全文），按创建时间倒序。"""
+    items, total = library_store.list(q=q, limit=limit, offset=offset, favorites_only=favorites_only)
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/library/{entry_id}")
+async def library_get(entry_id: str):
+    """完整记录：元数据 + 全文（转录、摘要、翻译、分段）。"""
+    record = library_store.get(entry_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return record
+
+
+@app.patch("/api/library/{entry_id}")
+async def library_update(entry_id: str, payload: dict = Body(...)):
+    """重命名（title）或标星（favorite）。"""
+    title = payload.get("title")
+    favorite = payload.get("favorite")
+    if title is None and favorite is None:
+        raise HTTPException(status_code=400, detail="没有可更新的字段")
+    if title is not None and not str(title).strip():
+        raise HTTPException(status_code=400, detail="标题不能为空")
+    updated = library_store.update(
+        entry_id,
+        title=str(title).strip() if title is not None else None,
+        favorite=bool(favorite) if favorite is not None else None,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return updated
+
+
+@app.delete("/api/library/{entry_id}")
+async def library_delete(entry_id: str):
+    """彻底删除一条记录及其全部文件。仅由用户主动触发。"""
+    if not await asyncio.to_thread(library_store.delete, entry_id):
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return {"deleted": entry_id, "stats": library_store.stats()}
+
+
+@app.get("/api/library/{entry_id}/asset/{kind}")
+async def library_asset(entry_id: str, kind: str, download: bool = False):
+    """取记录的产物文件（audio/video/srt/vtt/raw/script/summary/translation）。
+
+    download=false（默认）内联播放，FileResponse 自带 Range 支持；
+    download=true 时按记录标题生成下载名。
+    """
+    path = library_store.asset_path(entry_id, kind)
+    if path is None:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    ext = path.suffix.lower()
+    media_type = TEXT_DOWNLOAD_MIME.get(ext) or MEDIA_MIME.get(ext) or "application/octet-stream"
+    if not download:
+        return FileResponse(
+            path,
+            media_type=media_type,
+            headers={"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"},
+        )
+
+    meta = library_store.get_meta(entry_id) or {}
+    stem = _sanitize_title_for_filename(meta.get("title") or entry_id)
+    return FileResponse(path, media_type=media_type, filename=f"{stem}{ext}")
+
+
 @app.get("/api/history")
 async def get_history(limit: int = 100):
-    """已完成任务的紧凑列表（历史记录），按创建时间倒序。"""
+    """已完成任务的紧凑列表。**已废弃**：新界面请用 /api/library。"""
     items = []
     for tid, t in tasks.items():
         if t.get("status") != "completed":
