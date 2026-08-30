@@ -455,12 +455,15 @@ class LibraryStore:
                 path = self.asset_path(entry_id, kind)
                 if path:
                     try:
-                        freed += path.stat().st_size
+                        size = path.stat().st_size
                         path.unlink()
+                        # 只在 unlink 成功后计入：Windows 上文件仍被响应占用时会失败，
+                        # 先计后删会让界面报出一个并未真正释放的数字。
+                        freed += size
                         assets.pop(kind, None)
                         dropped_kinds.append(kind)
                     except OSError as e:
-                        logger.warning(f"删除产物失败 {entry_id}/{kind}: {e}")
+                        logger.warning(f"删除产物失败（空间未释放）{entry_id}/{kind}: {e}")
             if not freed:
                 return 0
             # 文件已不在，旧接口的文件名映射一并撤销，避免解析到空路径
