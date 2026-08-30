@@ -24,7 +24,9 @@
     },
     "files": [
       "main.js",
-      "preload.js"
+      "preload.js",
+      "preload-splash.js",
+      "splash.html"
     ],
     "extraResources": [
       {
@@ -53,7 +55,8 @@
       "perMachine": false,
       "shortcutName": "AI Video Transcriber",
       "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "uninstallerIcon": "build/icon.ico",
+      "include": "build/installer.nsh"
     }
   }
 }
