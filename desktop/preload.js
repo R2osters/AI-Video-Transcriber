@@ -11,4 +11,7 @@ contextBridge.exposeInMainWorld('avt', {
   openDataFolder: () => ipcRenderer.invoke('avt:open-data-dir'),
   openLogs: () => ipcRenderer.invoke('avt:open-logs'),
   engineStatus: () => ipcRenderer.invoke('avt:engine-status'),
+  // Barre de progression sur l'icône de la barre des tâches : ratio entre 0 et 1,
+  // -1 pour l'effacer. Sans effet dans un navigateur (window.avt n'existe pas).
+  setTaskbarProgress: (ratio) => ipcRenderer.invoke('avt:taskbar-progress', ratio),
 });

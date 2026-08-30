@@ -240,6 +240,19 @@ function registerIpc() {
     showMainWindow();
     return true;
   });
+  // Progression sur l'icône de la barre des tâches. Sert aux téléchargements
+  // qui surviennent en cours d'usage (modèle de traduction) : contrairement au
+  // modèle Whisper préchargé au démarrage, il n'y a pas d'écran dédié pour les
+  // montrer, et l'utilisateur peut avoir réduit la fenêtre.
+  // ratio : 0..1 pour avancer, -1 pour effacer la barre.
+  ipcMain.handle('avt:taskbar-progress', (_event, ratio) => {
+    if (!mainWindow) return false;
+    const valeur = Number(ratio);
+    if (!Number.isFinite(valeur)) return false;
+    mainWindow.setProgressBar(valeur < 0 ? -1 : Math.min(1, Math.max(0, valeur)));
+    return true;
+  });
+
   ipcMain.handle('avt:open-library', () => shell.openPath(path.join(DATA_DIR, 'library')));
   ipcMain.handle('avt:open-data-dir', () => shell.openPath(DATA_DIR));
   ipcMain.handle('avt:open-logs', () => shell.openPath(path.join(DATA_DIR, 'backend.log')));

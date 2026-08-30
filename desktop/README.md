@@ -69,7 +69,7 @@ Ce que fait `dist:full` :
 
 ## Premier lancement
 
-Au tout premier démarrage, le modèle Whisper `base` (~150 Mo) n'est pas encore en cache.
+Au tout premier démarrage, le modèle Whisper `base` (~138 Mo) n'est pas encore en cache.
 `backend_entry.py` le télécharge dans un thread de fond pendant que le serveur répond déjà,
 et publie son état dans `engine-status.json` (`starting` → `downloading` → `ready` / `error`).
 L'écran de démarrage suit cet état et propose **Continuer sans attendre** : le téléchargement
@@ -77,7 +77,7 @@ se poursuit en arrière-plan. Réglage : `AVT_PRELOAD_MODEL` (vide = pas de pré
 
 `HF_HOME` n'est posé que s'il n'existe pas déjà (`setdefault`). Sur une machine où il est
 défini pour d'autres outils, le modèle atterrit dans ce cache-là et non dans
-`<AVT_DATA_DIR>\models` — c'est voulu (cache partagé, pas de doublon de 150 Mo), mais
+`<AVT_DATA_DIR>\models` — c'est voulu (cache partagé, pas de doublon de 138 Mo), mais
 ça surprend au débogage. La détection « modèle déjà présent » lit la même variable, donc
 les deux restent cohérents.
 
@@ -92,9 +92,15 @@ les deux restent cohérents.
 | `avt.openLogs()` | ouvre `backend.log` |
 | `avt.engineStatus()` | état du préchargement du modèle |
 | `avt.version()` | version de l'application |
+| `avt.setTaskbarProgress(r)` | barre de progression sur l'icône (0..1, -1 pour effacer) |
 
 Aucun accès disque brut n'est exposé : uniquement `shell.openPath` sur des chemins calculés
 côté processus principal.
+
+`setTaskbarProgress` sert aux téléchargements qui surviennent **en cours d'usage** —
+le modèle de traduction locale, par exemple. Le modèle Whisper, lui, est préchargé au
+démarrage et suivi par l'écran de démarrage ; un téléchargement déclenché plus tard n'a
+pas d'écran dédié et la fenêtre peut être réduite, d'où la barre sur l'icône.
 
 ## Désinstallation
 
