@@ -421,12 +421,22 @@ class LibraryStore:
             self._db.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
             self._db.execute("DELETE FROM asset_names WHERE entry_id = ?", (entry_id,))
             self._db.commit()
-        try:
-            shutil.rmtree(str(target), ignore_errors=True)
-        except OSError as e:
-            logger.warning(f"删除记录目录失败 {entry_id}: {e}")
+        if not self._remove_dir(target):
+            # Windows：文件仍被正在发送的响应占用时无法删除。索引行已经删掉，
+            # 记录不会再出现在界面里；残留目录由下次启动的 reindex() 清理。
+            logger.warning(f"记录目录暂时无法删除，将在下次启动时清理: {entry_id}")
         logger.info(f"记录已删除: {entry_id}")
         return True
+
+    @staticmethod
+    def _remove_dir(target: Path) -> bool:
+        """删除目录，失败重试几次；仍失败返回 False 而不是假装成功。"""
+        for _ in range(3):
+            shutil.rmtree(str(target), ignore_errors=True)
+            if not target.exists():
+                return True
+            time.sleep(0.05)
+        return not target.exists()
 
     def drop_assets(self, entry_id: str, kinds: Iterable[str] = ("audio", "video")) -> int:
         """只删产物、保留文本（“释放空间”用）。返回释放的字节数。"""
@@ -563,7 +573,7 @@ class LibraryStore:
 
     def reindex(self) -> Dict[str, int]:
         """按磁盘重建索引：补录孤立目录、剔除目录已消失的行。启动时调用一次。"""
-        added = dropped = 0
+        added = dropped = purged = 0
         with self._lock:
             known = {r["id"] for r in self._db.execute("SELECT id FROM entries").fetchall()}
 
@@ -571,8 +581,16 @@ class LibraryStore:
         for child in self.root.iterdir():
             if not child.is_dir() or not _SAFE_ID.match(child.name):
                 continue
+            if not (child / "entry.json").is_file():
+                # 没有 entry.json 的目录只可能是残骸：删除时文件被占用而留下的，
+                # 或入库中途崩溃的半成品。此刻没有请求在读它们，可以安全清理。
+                if self._remove_dir(child):
+                    purged += 1
+                else:
+                    logger.warning(f"残留目录仍无法删除: {child.name}")
+                continue
             on_disk.add(child.name)
-            if child.name in known or not (child / "entry.json").is_file():
+            if child.name in known:
                 continue
             try:
                 with open(child / "entry.json", "r", encoding="utf-8") as f:
@@ -591,9 +609,9 @@ class LibraryStore:
                 self._db.commit()
             dropped += 1
 
-        if added or dropped:
-            logger.info(f"库索引重建: 补录 {added} 条, 剔除 {dropped} 条")
-        return {"added": added, "dropped": dropped}
+        if added or dropped or purged:
+            logger.info(f"库索引重建: 补录 {added} 条, 剔除 {dropped} 条, 清理残留 {purged} 个")
+        return {"added": added, "dropped": dropped, "purged": purged}
 
     def _insert_existing(self, entry_id: str, record: Dict[str, Any], size_bytes: int) -> None:
         assets = record.get("assets") or {}
