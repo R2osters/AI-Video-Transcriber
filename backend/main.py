@@ -1,6 +1,6 @@
 from fastapi import Body, FastAPI, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import os
 import asyncio
@@ -12,6 +12,7 @@ import aiofiles
 import uuid
 import json
 import re
+import secrets
 import openai
 
 from video_processor import VideoProcessor
@@ -37,14 +38,52 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI视频转录器", version="1.0.0")
 
-# CORS中间件配置
+# 本地访问令牌（桌面版由 Electron 在启动后端时注入 AVT_TOKEN）。
+#
+# 桌面版把后端监听在 127.0.0.1，但浏览器里的任意网页也能访问该地址：
+# 若不加限制，用户随便打开一个页面就能读取整个转录库——包括长期保存的
+# 原始音频。设置 AVT_TOKEN 后：
+#   1) 不再输出 CORS 头，跨源读取被浏览器拦截；
+#   2) /api 与 /ws 需携带令牌，令牌由服务端注入到 index.html，页面自带；
+#   3) 校验 Host，阻断 DNS 重绑定。
+# 未设置时行为与旧版完全一致，Web/Docker 部署不受影响。
+AVT_TOKEN = os.getenv("AVT_TOKEN", "").strip()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # 有令牌即桌面版：页面与接口同源，无需任何跨源许可
+    allow_origins=[] if AVT_TOKEN else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_TOKEN_EXEMPT_PATHS = frozenset({"/api/health"})
+_ALLOWED_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+
+
+@app.middleware("http")
+async def _local_access_guard(request, call_next):
+    """桌面版的本地访问校验；未设置 AVT_TOKEN 时直接放行。"""
+    if not AVT_TOKEN:
+        return await call_next(request)
+
+    # Host 只允许回环地址，挫败 DNS 重绑定（域名解析到 127.0.0.1）
+    host = (request.headers.get("host") or "").split(":")[0]
+    if host and host not in _ALLOWED_HOSTS:
+        return JSONResponse({"detail": "主机名不被允许"}, status_code=403)
+
+    path = request.url.path
+    if path.startswith(("/api", "/ws")) and path not in _TOKEN_EXEMPT_PATHS:
+        supplied = (
+            request.headers.get("x-avt-token")
+            or request.query_params.get("token")
+            or ""
+        )
+        if not secrets.compare_digest(supplied, AVT_TOKEN):
+            return JSONResponse({"detail": "缺少或无效的本地访问令牌"}, status_code=401)
+
+    return await call_next(request)
 
 # 获取项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -661,8 +700,26 @@ async def _run_post_extract_pipeline(
 
 @app.get("/")
 async def read_root():
-    """返回前端页面"""
-    return FileResponse(str(STATIC_DIR / "index.html"))
+    """返回前端页面。
+
+    桌面版会把本地访问令牌注入页面：接口与页面同源，前端因此无需任何配置，
+    而浏览器里的第三方页面拿不到这个令牌。
+    """
+    index_path = STATIC_DIR / "index.html"
+    if not AVT_TOKEN:
+        return FileResponse(str(index_path))
+
+    html = index_path.read_text(encoding="utf-8")
+    injected = f'<script>window.__AVT_TOKEN__ = "{AVT_TOKEN}";</script>'
+    html = html.replace("</head>", f"{injected}\n</head>", 1)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
+def _ws_token_ok(ws: WebSocket) -> bool:
+    """WebSocket 不经过 HTTP 中间件，需单独校验令牌。"""
+    if not AVT_TOKEN:
+        return True
+    return secrets.compare_digest(ws.query_params.get("token") or "", AVT_TOKEN)
 
 
 @app.get("/api/health")
@@ -1583,6 +1640,10 @@ async def live_transcribe(ws: WebSocket):
       服务端 → 客户端: {"type":"ready"} / {"type":"delta","text"} /
                        {"type":"utterance","text"} / {"type":"error","message"}
     """
+    if not _ws_token_ok(ws):
+        await ws.close(code=1008)
+        return
+
     await ws.accept()
     oai = None
     try:
@@ -1722,6 +1783,10 @@ async def live_local_transcribe(ws: WebSocket):
                {"type":"utterance","text"}（最终结果）/ {"type":"error","message"}
     说明：整段缓冲重转录，间隔自适应（至少 3 秒新音频且上一轮已结束）。
     """
+    if not _ws_token_ok(ws):
+        await ws.close(code=1008)
+        return
+
     import base64
 
     await ws.accept()
