@@ -48,12 +48,16 @@ app.add_middleware(
 # 获取项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
 
+# 桌面版（PyInstaller/Electron）通过环境变量覆盖静态资源与数据目录
+STATIC_DIR = Path(os.getenv("AVT_STATIC_DIR", str(PROJECT_ROOT / "static")))
+DATA_ROOT = Path(os.getenv("AVT_DATA_DIR", str(PROJECT_ROOT)))
+
 # 挂载静态文件
-app.mount("/static", StaticFiles(directory=str(PROJECT_ROOT / "static")), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # 创建临时目录
-TEMP_DIR = PROJECT_ROOT / "temp"
-TEMP_DIR.mkdir(exist_ok=True)
+TEMP_DIR = DATA_ROOT / "temp"
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 # 初始化处理器
 video_processor = VideoProcessor()
@@ -548,7 +552,13 @@ async def _run_post_extract_pipeline(
 @app.get("/")
 async def read_root():
     """返回前端页面"""
-    return FileResponse(str(PROJECT_ROOT / "static" / "index.html"))
+    return FileResponse(str(STATIC_DIR / "index.html"))
+
+
+@app.get("/api/health")
+async def health_check():
+    """健康检查（桌面版启动探测用）"""
+    return {"status": "ok"}
 
 @app.post("/api/models")
 async def list_models(
