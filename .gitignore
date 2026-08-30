@@ -81,3 +81,7 @@ desktop/*.spec.bak
 # desktop/build contient l'icône (exception au build/ global)
 !desktop/build/
 !desktop/build/**
+
+# Installeurs générés (jamais versionnés — passer par une release taguée)
+*.exe
+releases/
