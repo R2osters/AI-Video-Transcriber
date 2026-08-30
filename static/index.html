@@ -468,7 +468,7 @@
     }
     .hist-more-row:hover { border-style: solid; color: var(--ink); }
 
-    .set-card.disk, .set-card.engine { width: 100%; }
+    .set-card.disk, .set-card.engine, .set-card.auth { width: 100%; }
     .engine-bar {
       height: 6px; border-radius: 3px; background: var(--sand-deep);
       overflow: hidden; display: none;
@@ -1085,6 +1085,27 @@
         <div class="set-actions">
           <button class="btn-secondary" id="freeSpaceBtn">Libérer de l'espace</button>
           <button class="btn-secondary" id="resetLocationBtn">Emplacement par défaut</button>
+        </div>
+      </div>
+
+      <div class="set-card auth card">
+        <div class="set-card-head">
+          <div class="set-card-title">Contenus qui demandent une connexion</div>
+        </div>
+        <div class="set-hint">
+          Toutes les plateformes reconnues par l'application fonctionnent sans réglage.
+          Certaines exigent en revanche d'être connecté pour un contenu précis — Instagram,
+          Facebook, X, ou une vidéo privée. L'application peut alors réutiliser la session
+          d'un navigateur déjà ouvert sur cet ordinateur. Les cookies sont lus localement,
+          ne sont copiés nulle part et ne quittent pas la machine.
+        </div>
+        <div class="set-field">
+          <label for="cookieBrowser">Navigateur où vous êtes connecté</label>
+          <span class="select-wrap" style="width:260px">
+            <select id="cookieBrowser" class="opt-select" style="width:100%;background:var(--cream)">
+              <option value="">— aucun —</option>
+            </select>
+          </span>
         </div>
       </div>
 

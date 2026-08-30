@@ -82,7 +82,9 @@ class App {
       b.classList.toggle('active', b.dataset.view === key));
     $('sidebar').classList.remove('open');
     if (name === 'history') this._renderHistory();
-    if (name === 'settings') { this._refreshDisk(); this._refreshEngine(); this._refreshLocation(); }
+    if (name === 'settings') {
+      this._refreshDisk(); this._refreshEngine(); this._refreshLocation(); this._refreshAuth();
+    }
   }
 
   /* ── Bindings ─────────────────────────────────────────── */
@@ -158,6 +160,7 @@ class App {
     $('downloadEngineBtn').addEventListener('click', () => this._downloadEngine());
     $('relocateBtn').addEventListener('click', () => this._relocate());
     $('resetLocationBtn').addEventListener('click', () => this._relocate(''));
+    $('cookieBrowser').addEventListener('change', () => this._saveAuth());
     $('openLibraryBtn').addEventListener('click', () => {
       if (window.avt && window.avt.openLibrary) window.avt.openLibrary();
     });
@@ -1497,6 +1500,37 @@ class App {
       this._renderDiskPanel();
       this._toast(`${this._fmtSize(res.freed)} libérés`);
     } catch (_) { this._toast('Libération impossible'); }
+  }
+
+  /* ── Connexion aux plateformes ────────────────────────── */
+  async _refreshAuth() {
+    let a;
+    try { a = await (await fetch(`${API}/platforms/auth`)).json(); }
+    catch (_) { return; }
+    const sel = $('cookieBrowser');
+    if (sel.options.length <= 1) {
+      const labels = {
+        chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox', brave: 'Brave',
+        chromium: 'Chromium', opera: 'Opera', vivaldi: 'Vivaldi', safari: 'Safari',
+      };
+      for (const b of a.supported) {
+        const opt = document.createElement('option');
+        opt.value = b;
+        opt.textContent = labels[b] || b;
+        sel.appendChild(opt);
+      }
+    }
+    sel.value = a.browser || '';
+  }
+
+  async _saveAuth() {
+    const browser = $('cookieBrowser').value;
+    try {
+      await fetch(`${API}/platforms/auth`, this._libJson('POST', { browser }));
+      this._toast(browser
+        ? `Session ${$('cookieBrowser').selectedOptions[0].textContent} utilisée pour les contenus protégés`
+        : 'Aucune session utilisée');
+    } catch (_) { this._toast('Réglage impossible'); }
   }
 
   /* ── Emplacement de la bibliothèque ───────────────────── */

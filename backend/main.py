@@ -136,6 +136,11 @@ def resolve_library_dir() -> Path:
     return DATA_ROOT / "library"
 
 
+# 登录态浏览器的选择同样记在配置里，启动时恢复
+_cookies_browser = (load_app_config().get("cookies_browser") or "").strip().lower()
+if _cookies_browser:
+    os.environ.setdefault("AVT_COOKIES_BROWSER", _cookies_browser)
+
 # 转录库：任务完成后产物从 temp 迁入此处长期保存
 LIBRARY_DIR = resolve_library_dir()
 library_store = LibraryStore(LIBRARY_DIR)
@@ -417,6 +422,17 @@ async def _maybe_diarize(task_id: str, audio_path: str, segments, raw_script: st
     except Exception as e:
         logger.warning(f"说话人分离失败，继续无标签流程: {e}")
     return segments, raw_script
+
+
+def _explain_failure(error: object) -> dict:
+    """任务失败原因的可读解释；模块缺失时也要给出点什么。"""
+    try:
+        from download_hints import explain
+
+        return explain(error)
+    except Exception:
+        return {"reason": "unknown", "message": "Le traitement a échoué.",
+                "hint": "Réessayez.", "detail": str(error)}
 
 
 def _platform_from_url(url: str) -> str:
@@ -1112,7 +1128,9 @@ async def process_video_task(
         tasks[task_id].update({
             "status": "error",
             "error": str(e),
-            "message": f"处理失败: {str(e)}"
+            # 给用户可执行的说明，而不是一句英文技术信息
+            "error_reason": _explain_failure(e)["reason"],
+            "message": _explain_failure(e)["message"] + " " + _explain_failure(e)["hint"]
         })
         save_tasks(tasks)
         await broadcast_task_update(task_id, tasks[task_id])
@@ -1234,7 +1252,9 @@ async def process_upload_task(
         tasks[task_id].update({
             "status": "error",
             "error": str(e),
-            "message": f"处理失败: {str(e)}",
+            # 给用户可执行的说明，而不是一句英文技术信息
+            "error_reason": _explain_failure(e)["reason"],
+            "message": _explain_failure(e)["message"] + " " + _explain_failure(e)["hint"],
         })
         save_tasks(tasks)
         await broadcast_task_update(task_id, tasks[task_id])
@@ -1471,6 +1491,36 @@ def _relocate_library(target: Path) -> None:
         except Exception:
             pass
         _relocation.update({"state": "error", "error": str(e)})
+
+
+@app.get("/api/platforms/auth")
+async def platforms_auth():
+    """当前用于读取 cookies 的浏览器，以及可选项。"""
+    return {
+        "browser": VideoProcessor.cookie_browser(),
+        "supported": list(VideoProcessor.SUPPORTED_BROWSERS),
+    }
+
+
+@app.post("/api/platforms/auth")
+async def set_platforms_auth(payload: dict = Body(...)):
+    """设置读取 cookies 的浏览器；空值表示不使用登录态。
+
+    cookies 只在本机读取并交给 yt-dlp，不写入任何文件，也不离开这台机器。
+    """
+    browser = (payload.get("browser") or "").strip().lower()
+    if browser and browser not in VideoProcessor.SUPPORTED_BROWSERS:
+        raise HTTPException(status_code=400, detail=f"浏览器不受支持: {browser}")
+
+    cfg = load_app_config()
+    cfg["cookies_browser"] = browser
+    save_app_config(cfg)
+    # 立即生效，无需重启
+    if browser:
+        os.environ["AVT_COOKIES_BROWSER"] = browser
+    else:
+        os.environ.pop("AVT_COOKIES_BROWSER", None)
+    return {"browser": VideoProcessor.cookie_browser()}
 
 
 @app.get("/api/library/location")
