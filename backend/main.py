@@ -1515,9 +1515,14 @@ async def ytdlp_status(check: bool = False):
     """
     import ytdlp_updater as up
 
+    state = up.status()
     data = {
         "installed": up.installed_version(),
         "override_active": up.is_override_active(_EARLY_DATA_ROOT),
+        # none / active / ignored_older / too_late — pourquoi la surcharge n'est pas prise
+        "override": state.get("override", "none"),
+        "override_version": state.get("override_version", ""),
+        "bundled_version": state.get("bundled_version", ""),
         "updating": bool(_ytdlp_thread and _ytdlp_thread.is_alive()),
         "progress": up.status(),
         "last_result": _ytdlp_result,

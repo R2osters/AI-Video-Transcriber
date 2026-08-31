@@ -52,10 +52,18 @@ class UpdaterTestCase(unittest.TestCase):
         self.digest = hashlib.sha256(self.wheel).hexdigest()
         self._real_urlopen = up.urllib.request.urlopen
         self._saved_path = list(sys.path)
+        # activate() s'exécute au démarrage, avant tout import de yt_dlp. D'autres
+        # fichiers de tests importent main (donc yt_dlp) : on rétablit les conditions
+        # réelles, sinon la garde « déjà importé » se déclenche à juste titre.
+        self._saved_modules = {n: m for n, m in sys.modules.items()
+                               if n == "yt_dlp" or n.startswith("yt_dlp.")}
+        for name in self._saved_modules:
+            sys.modules.pop(name, None)
 
     def tearDown(self):
         up.urllib.request.urlopen = self._real_urlopen
         sys.path[:] = self._saved_path
+        sys.modules.update(self._saved_modules)
         self._tmp.cleanup()
 
     def fake_pypi(self, wheel=None, sha=None, version="9.9.9"):
@@ -109,6 +117,118 @@ class TestActivation(UpdaterTestCase):
         mieux vaut la version d'origine qu'un paquet à moitié installé."""
         (up.override_dir(self.root) / "yt_dlp").mkdir(parents=True)
         self.assertIsNone(up.activate(self.root))
+
+
+class TestActivationGuards(UpdaterTestCase):
+    """Deux pièges où l'utilisateur croirait tourner sur une mise à jour sans que ce soit vrai."""
+
+    def make_override(self, version="9.9.9"):
+        target = up.override_dir(self.root) / "yt_dlp"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "__init__.py").write_text("", encoding="utf-8")
+        (target / "version.py").write_text(f"__version__ = '{version}'\n", encoding="utf-8")
+        return target
+
+    def fake_bundled(self, version):
+        """Simule le yt_dlp livré avec l'application."""
+        import types
+
+        mod = types.ModuleType("yt_dlp")
+        ver = types.ModuleType("yt_dlp.version")
+        ver.__version__ = version
+        mod.version = ver
+        sys.modules["yt_dlp"] = mod
+        sys.modules["yt_dlp.version"] = ver
+
+    def tearDown(self):
+        for name in [n for n in list(sys.modules) if n == "yt_dlp" or n.startswith("yt_dlp.")]:
+            sys.modules.pop(name, None)
+        super().tearDown()
+
+    def test_refuses_when_already_imported(self):
+        """REGRESSION — si un réordonnancement des imports fait charger yt_dlp avant
+        activate(), la surcharge ne peut plus prendre. Il faut le dire, pas faire semblant."""
+        self.make_override()
+        self.fake_bundled("2020.01.01")
+        # yt_dlp est déjà dans sys.modules à cet instant
+        self.assertIsNone(up.activate(self.root))
+        self.assertEqual(up.status().get("override"), "too_late")
+        self.assertNotIn(str(up.override_dir(self.root)), sys.path)
+
+    def test_older_override_is_ignored(self):
+        """REGRESSION — après une mise à jour de l'application, une surcharge plus
+        ancienne ferait tourner l'utilisateur sur de vieux extracteurs sans le savoir."""
+        self.make_override(version="2026.01.01")
+        original = up._bundled_version
+        up._bundled_version = lambda: "2026.08.19"
+        try:
+            self.assertIsNone(up.activate(self.root))
+        finally:
+            up._bundled_version = original
+        st = up.status()
+        self.assertEqual(st.get("override"), "ignored_older")
+        self.assertEqual(st.get("override_version"), "2026.01.01")
+        self.assertEqual(st.get("bundled_version"), "2026.08.19")
+
+    def test_override_directory_is_not_deleted_when_ignored(self):
+        """On n'efface jamais de données tout seul : l'utilisateur décide."""
+        self.make_override(version="2026.01.01")
+        original = up._bundled_version
+        up._bundled_version = lambda: "2026.08.19"
+        try:
+            up.activate(self.root)
+        finally:
+            up._bundled_version = original
+        self.assertTrue((up.override_dir(self.root) / "yt_dlp" / "version.py").is_file())
+
+    def test_newer_override_is_used(self):
+        self.make_override(version="2026.09.01")
+        original = up._bundled_version
+        up._bundled_version = lambda: "2026.08.19"
+        try:
+            self.assertIsNotNone(up.activate(self.root))
+        finally:
+            up._bundled_version = original
+        self.assertEqual(up.status().get("override"), "active")
+
+    def test_equal_versions_prefer_the_bundle(self):
+        """À version égale, autant utiliser celle de l'application : un fichier de
+        moins à faire vivre."""
+        self.make_override(version="2026.08.19")
+        original = up._bundled_version
+        up._bundled_version = lambda: "2026.08.19"
+        try:
+            self.assertIsNone(up.activate(self.root))
+        finally:
+            up._bundled_version = original
+
+    def test_unreadable_version_does_not_block_activation(self):
+        """Version illisible : on active plutôt que de bloquer — l'utilisateur a
+        demandé cette mise à jour explicitement."""
+        target = self.make_override()
+        (target / "version.py").unlink()
+        original = up._bundled_version
+        up._bundled_version = lambda: "2026.08.19"
+        try:
+            self.assertIsNotNone(up.activate(self.root))
+        finally:
+            up._bundled_version = original
+
+
+class TestVersionParsing(unittest.TestCase):
+
+    def test_ordering(self):
+        self.assertLess(up._parse_version("2026.01.01"), up._parse_version("2026.08.19"))
+        self.assertLess(up._parse_version("2025.12.31"), up._parse_version("2026.01.01"))
+        self.assertEqual(up._parse_version("2026.08.19"), up._parse_version("2026.08.19"))
+
+    def test_suffixed_version(self):
+        """yt-dlp publie parfois des versions suffixées."""
+        self.assertEqual(up._parse_version("2026.08.19.1")[:3], (2026, 8, 19))
+
+    def test_garbage_is_empty(self):
+        self.assertEqual(up._parse_version("inconnue"), ())
+        self.assertEqual(up._parse_version(""), ())
 
 
 class TestInstall(UpdaterTestCase):

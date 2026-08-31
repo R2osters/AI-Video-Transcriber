@@ -43,20 +43,91 @@ def override_dir(data_root: Path) -> Path:
     return Path(data_root) / OVERRIDE_DIRNAME / MODULE
 
 
+def _parse_version(text: str) -> tuple:
+    """yt-dlp 版本形如 2026.08.19，按整数元组比较；无法解析返回空元组。"""
+    parts = []
+    for chunk in str(text or "").split(".")[:3]:
+        digits = "".join(c for c in chunk if c.isdigit())
+        if not digits:
+            break
+        parts.append(int(digits))
+    return tuple(parts)
+
+
+def override_version(data_root: Path) -> str:
+    """**不导入**地读出覆盖目录里的版本号。
+
+    导入之后再想换掉就晚了，所以这里只做文本读取。
+    """
+    version_file = override_dir(data_root) / MODULE / "version.py"
+    try:
+        for line in version_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.strip().startswith("__version__"):
+                return line.split("=", 1)[1].strip().strip("'\"")
+    except OSError:
+        pass
+    return ""
+
+
+def _bundled_version() -> str:
+    """随应用分发的那份版本号。
+
+    只能靠导入才能知道，导入后立刻把 yt_dlp 相关模块从 sys.modules 清干净，
+    好让后续的导入重新走 sys.path——此时覆盖目录已经排在前面。
+    在 main.py 的最开头调用，那时还没有任何代码用过 yt_dlp，因此清理是安全的。
+    """
+    try:
+        import yt_dlp
+
+        version = getattr(yt_dlp.version, "__version__", "") or ""
+    except Exception:
+        return ""
+    finally:
+        for name in [n for n in sys.modules if n == MODULE or n.startswith(MODULE + ".")]:
+            sys.modules.pop(name, None)
+    return version
+
+
 def activate(data_root: Path) -> Optional[Path]:
     """把覆盖目录插到 sys.path 最前面。
 
-    必须在 `import yt_dlp` 之前调用，否则冻结版已经被导入，换不掉了。
-    返回生效的目录；没有可用覆盖时返回 None。
+    返回生效的目录；未启用时返回 None，并在 status() 里说明原因——
+    「以为自己更新了、其实没有」比不更新更糟。
     """
+    # 已经导入过就换不掉了。这种情况只会由 import 顺序被改动引起：
+    # 与其假装成功，不如明确报错，否则故障是静默的。
+    if MODULE in sys.modules:
+        _set(state="idle", override="too_late")
+        logger.warning(
+            f"{PACKAGE} 已被导入，无法启用更新版：activate() 必须在任何 "
+            f"import {MODULE} 之前调用（检查 main.py 顶部的导入顺序）"
+        )
+        return None
+
     path = override_dir(data_root)
     if not (path / MODULE / "__init__.py").is_file():
+        _set(override="none")
         return None
+
+    # 应用升级后，随包分发的版本可能反超覆盖目录。此时继续用旧的覆盖，
+    # 等于让用户装了新版却仍跑着旧的提取器，且毫无提示。
+    mine = override_version(data_root)
+    bundled = _bundled_version()
+    if mine and bundled and _parse_version(mine) <= _parse_version(bundled):
+        _set(state="idle", override="ignored_older",
+             override_version=mine, bundled_version=bundled)
+        logger.info(
+            f"忽略更新目录中的 {PACKAGE} {mine}：随应用分发的 {bundled} 不更旧。"
+            f"目录保留在原处，用户可自行查看或删除。"
+        )
+        return None
+
     entry = str(path)
     if entry in sys.path:
         sys.path.remove(entry)
     sys.path.insert(0, entry)
-    logger.info(f"使用更新后的 {PACKAGE}: {entry}")
+    _set(override="active", override_version=mine, bundled_version=bundled)
+    logger.info(f"使用更新后的 {PACKAGE} {mine or '?'}（随应用分发的是 {bundled or '?'}）: {entry}")
     return path
 
 
