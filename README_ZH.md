@@ -4,7 +4,7 @@
 
 中文 | [English](README.md)
 
-一款开源的 AI 视频/播客转录、摘要与归档工具：支持 YouTube、Bilibili、抖音、Apple Podcasts、SoundCloud 等 30+ 平台链接，**也支持本地上传**（音视频或纯文本）。
+一款开源的 AI 视频/播客转录、摘要与归档工具：支持 YouTube、Bilibili、抖音、Apple Podcasts、SoundCloud 等 1 700+ 站点链接，**也支持本地上传**（音视频或纯文本）。
 
 ![Interface](cn_video.png)
 
@@ -12,7 +12,7 @@
 
 ## ✨ 功能特性
 
-- 🎥 **多平台支持**：支持 YouTube、Bilibili、抖音、Apple Podcasts、SoundCloud 等 30+ 平台
+- 🎥 **多平台支持**：支持 YouTube、Bilibili、抖音、Apple Podcasts、SoundCloud 等 1 700+ 站点
 - ⚡ **字幕优先架构**：对有原生字幕的平台（如 YouTube）直接提取字幕文本，无需下载音频，速度大幅提升；无字幕时才回退到 Whisper 转录
 - 🎬 **原视频下载**：转录的同时保留源视频。下载与转录**并行进行**，结果卡片内可直接预览播放，一键保存。走 Whisper 路径时音轨直接从这个视频里抽取，因此同一个视频只下载一次。只要文本时关掉「保留原视频」即可
 - 📁 **本地上传**：支持拖放或选择文件 —— `.txt`（作为文稿直接进入后续管线）、`.mp3`、`.mp4`、`.m4a`、`.wav`、`.webm`、`.mkv`、`.ogg`、`.flac`。音视频经 FFmpeg 转码后由 Whisper 转录，优化、翻译、摘要流程与链接任务完全一致
@@ -53,7 +53,7 @@
 <summary><b>方法一：自动安装</b></summary>
 
 ```bash
-git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+git clone https://github.com/R2osters/AI-Video-Transcriber.git
 cd AI-Video-Transcriber
 
 chmod +x install.sh
@@ -66,7 +66,7 @@ chmod +x install.sh
 <summary><b>方法二：Docker 部署</b></summary>
 
 ```bash
-git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+git clone https://github.com/R2osters/AI-Video-Transcriber.git
 cd AI-Video-Transcriber
 
 # 使用 Docker Compose（最简单）
@@ -501,7 +501,7 @@ AI 功能需要任意 OpenAI 兼容服务商的 API Key。可直接在页面 **A
 **前置条件**：从 https://www.docker.com/products/docker-desktop/ 安装 Docker Desktop，并确保服务正在运行。
 
 ```bash
-git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+git clone https://github.com/R2osters/AI-Video-Transcriber.git
 cd AI-Video-Transcriber
 cp .env.example .env      # 编辑以设置服务端默认值（可选）
 

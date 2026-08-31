@@ -4,7 +4,7 @@
 
 English | [中文](README_ZH.md)
 
-An AI-powered tool to transcribe, summarize, and archive videos and podcasts — paste a URL from YouTube, TikTok, Bilibili, Apple Podcasts, SoundCloud, and 30+ platforms, **or upload a local file** (audio, video, or plain text).
+An AI-powered tool to transcribe, summarize, and archive videos and podcasts — paste a URL from YouTube, TikTok, Bilibili, Apple Podcasts, SoundCloud, and 1 700+ other sites, **or upload a local file** (audio, video, or plain text).
 
 ![Interface](en_video.png)
 
@@ -12,7 +12,7 @@ An AI-powered tool to transcribe, summarize, and archive videos and podcasts —
 
 ## ✨ Features
 
-- 🎥 **Multi-Platform Support**: Works with YouTube, TikTok, Bilibili, Apple Podcasts, SoundCloud, and 30+ more
+- 🎥 **Multi-Platform Support**: no allow-list — any URL is handed to yt-dlp, which ships 1 700+ extractors (1 751 in the version tested)
 - ⚡ **Subtitle-First Architecture**: For platforms with native subtitles (e.g. YouTube), transcripts are extracted instantly — no audio download needed. Whisper is only a fallback, making the whole pipeline dramatically faster
 - 🎬 **Original Video Download**: Keep the source video alongside the transcript. It downloads **in parallel** with transcription, previews inline in the results card, and saves with one click. On the Whisper path the audio is extracted from that same file, so the video is only fetched once. Toggle **Keep original video** off when you want text only
 - 📁 **Local File Upload**: Drag-and-drop or pick a file — supported formats include `.txt` (treated as transcript text), audio (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.aac`, `.opus`, `.wma`, `.aiff`) and video (`.mp4`, `.webm`, `.mkv`, `.mov`, `.avi`). Media is normalized with FFmpeg for Whisper; the same optimize → translate → summarize pipeline runs as for URLs
@@ -58,7 +58,7 @@ An AI-powered tool to transcribe, summarize, and archive videos and podcasts —
 <summary><b>Method 1: Automatic Installation</b></summary>
 
 ```bash
-git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+git clone https://github.com/R2osters/AI-Video-Transcriber.git
 cd AI-Video-Transcriber
 
 chmod +x install.sh
@@ -71,7 +71,7 @@ chmod +x install.sh
 <summary><b>Method 2: Docker</b></summary>
 
 ```bash
-git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+git clone https://github.com/R2osters/AI-Video-Transcriber.git
 cd AI-Video-Transcriber
 
 # Using Docker Compose (easiest)
@@ -514,7 +514,7 @@ Usually environment configuration rather than a code bug. Check that you:
 **Prerequisites:** install Docker Desktop from https://www.docker.com/products/docker-desktop/ and make sure the service is running.
 
 ```bash
-git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+git clone https://github.com/R2osters/AI-Video-Transcriber.git
 cd AI-Video-Transcriber
 cp .env.example .env      # edit for server-side defaults (optional)
 
@@ -632,32 +632,13 @@ Issues and Pull Requests are welcome!
 - [FastAPI](https://fastapi.tiangolo.com/) — modern Python web framework
 - [OpenAI](https://openai.com/) — intelligent text processing API
 
+## 🙏 Credits
+
+This project is a derivative of [AI Video Transcriber](https://github.com/wendy7756/AI-Video-Transcriber) by wendy7756, used under the Apache License 2.0. It has since diverged: installable desktop build, on-disk history, local summarisation, translation and search without an API key, and a static showcase site.
+
 ## 📞 Contact
 
-For questions or suggestions, please open an Issue or contact Wendy.
-
----
-
-## 🚀 Try the Full Product — sipsip.ai
-
-This tool is the open-source part of **[sipsip.ai](https://sipsip.ai)**.
-
-The full product goes further:
-
-- 📧 **Daily email briefs** — follow your favorite creators and get an AI-curated digest in your inbox every morning
-- ⚡ Transcribe & summarize any video or podcast on demand
-- 🌐 Multi-language support across all features
-
-**Free to start** — no credit card required.
-
-➡️ [sipsip.ai](https://sipsip.ai)
-
----
-
-## More from the same developer
-
-- Recording a video? Try the [best free teleprompter](https://teleprompter.works) — use the browser version or download the [app version]((https://apps.apple.com/app/teleprompter-scrolling-scripts/id6767148844))for a better experience.
-- Growing a product on Pinterest? [GetPinFast](https://getpin.fast) is a Pinterest growth tool for more traffic and conversions.
+For questions or suggestions, please open an Issue.
 
 ---
 
