@@ -1,0 +1,11 @@
+# Les scripts shell et les workflows sont exécutés par des systèmes Unix
+# (runners macOS et Linux). Avec des fins de ligne CRLF, le noyau lit
+# « /usr/bin/env bash\r » et refuse de démarrer : « bad interpreter ».
+# On force donc LF dans le dépôt ET dans la copie de travail, quel que soit
+# core.autocrlf de la machine.
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# Inversement : les .ps1 sont lus par PowerShell 5.1 sous Windows.
+*.ps1  text eol=crlf
