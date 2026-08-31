@@ -14,6 +14,9 @@ on:
   push:
     tags: ['v*']
 
+permissions:
+  contents: write        # publication de la release
+
 jobs:
   build:
     name: dmg + zip (arm64)
@@ -57,11 +60,31 @@ jobs:
         working-directory: desktop
         run: ls -lh dist-installer/
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ai-video-transcriber-macos-arm64
-          path: |
-            desktop/dist-installer/*.dmg
-            desktop/dist-installer/*.zip
-          if-no-files-found: error
-          retention-days: 14
+
+      # Publication en release, pas en artefact : le stockage des artefacts est
+      # soumis a un quota de compte, celui des releases non. Un paquet de
+      # 228 Mo le sature en quelques executions.
+      - name: Publie le paquet
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}-mac"
+          printf '%s\n' \
+            "Paquet arm64 (Apple Silicon), non signe : Gatekeeper le refusera au premier lancement. Clic droit sur l'application, « Ouvrir », puis confirmer." \
+            "" \
+            "ffmpeg et ffprobe embarques sont en x86_64 et passent par Rosetta 2. L'application elle-meme est native arm64." \
+            "" \
+            "Construit par la CI sur un runner macOS, jamais teste sur une machine reelle." \
+            > notes.md
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "Transcriber ${VERSION} — macOS (Apple Silicon)" \
+              --notes-file notes.md \
+              --prerelease
+          fi
+          gh release upload "$TAG" \
+            "dist-installer/AI Video Transcriber-${VERSION}-arm64.dmg" \
+            "dist-installer/AI Video Transcriber-${VERSION}-arm64-mac.zip" \
+            --clobber
