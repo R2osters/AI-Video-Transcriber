@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation — Transcriber</title>
+<meta name="description" content="Installation Windows, Docker et sources, configuration de l'endpoint, référence de l'API HTTP et intégration MCP pour Claude Code et Codex.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Aller au contenu</a>
+
+<div class="utility">
+  <div>LOGICIEL INSTALLABLE — WINDOWS · DOCKER · CODE SOURCE — GRATUIT</div>
+  <div class="utility-links">
+    <a href="telecharger.html">TÉLÉCHARGER</a>
+    <a href="docs.html">DOCS</a>
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GITHUB</a>
+  </div>
+</div>
+
+<nav class="nav">
+  <div class="nav-left">
+    <a href="fonctionnalites.html">Produit</a>
+    <a href="index.html#pipeline">Pipeline</a>
+    <a href="plateformes.html">Plateformes</a>
+    <a href="docs.html" aria-current="page">Docs</a>
+  </div>
+  <div class="nav-mark"><a href="index.html">TRANSCRIBER</a></div>
+  <div class="nav-right">
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+    <a class="nav-cta" href="telecharger.html">Télécharger</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<header class="page-head">
+  <div>
+    <div class="eyebrow" style="margin-bottom:18px">Documentation</div>
+    <h1>INSTALLER,<br>CONFIGURER,<br>AUTOMATISER.</h1>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <p class="sub">Trois façons d'installer, une seule interface. Puis l'API HTTP et le serveur MCP, pour appeler le pipeline depuis vos scripts ou vos agents.</p>
+    <div class="tag-list">
+      <a class="tag" href="#install">Installation</a>
+      <a class="tag" href="#config">Configuration</a>
+      <a class="tag" href="#api">API</a>
+      <a class="tag" href="#agents">Agents & MCP</a>
+    </div>
+  </div>
+</header>
+
+<!-- ── Installation ──────────────────────────────────────────────────── -->
+<section class="section" id="install">
+  <div class="section-head">
+    <h2 class="h-section">INSTALLATION</h2>
+    <p class="right">Choisissez selon la machine : poste Windows, serveur partagé, ou environnement de développement.</p>
+  </div>
+
+  <div class="grid-3">
+    <div class="card" id="desktop">
+      <div class="kicker">Poste Windows</div>
+      <h3>INSTALLEUR .EXE</h3>
+      <p>Le chemin le plus court. Rien à installer d'autre : FFmpeg, Whisper et le backend sont dans le paquet.</p>
+      <ul style="display:flex;flex-direction:column;gap:7px;font-size:13px;color:var(--mute)">
+        <li>1 — Téléchargez <code>AI Video Transcriber Setup 1.1.0.exe</code></li>
+        <li>2 — Double-cliquez, suivez l'assistant</li>
+        <li>3 — Lancez depuis le menu Démarrer</li>
+      </ul>
+      <a class="btn btn-ghost" href="telecharger.html" style="align-self:flex-start;margin-top:auto">Page de téléchargement →</a>
+    </div>
+
+    <div class="card" id="docker">
+      <div class="kicker">Serveur ou macOS/Linux</div>
+      <h3>DOCKER</h3>
+      <p>Une image, une commande, accessible à toute l'équipe sur le réseau local.</p>
+      <div class="code">git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+cd AI-Video-Transcriber
+cp .env.example .env
+docker-compose up -d</div>
+      <p>Interface sur <code>http://localhost:8000</code>. L'historique des transcriptions vit sous <code>/app</code> dans le conteneur — décommentez le bloc <code>volumes</code> de <code>docker-compose.yml</code>, ou pointez <code>AVT_DATA_DIR</code> vers un volume monté, pour la conserver.</p>
+    </div>
+
+    <div class="card" id="source">
+      <div class="kicker">Développement</div>
+      <h3>DEPUIS LES SOURCES</h3>
+      <p>Python 3.8+ et FFmpeg doivent être présents sur la machine.</p>
+      <div class="code">git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+cd AI-Video-Transcriber
+pip install -r requirements.txt
+python start.py</div>
+      <p>Le script vérifie les dépendances et la présence de FFmpeg avant de démarrer le serveur.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Configuration ─────────────────────────────────────────────────── -->
+<section class="section section-alt" id="config">
+  <div class="section-head">
+    <h2 class="h-section">CONFIGURATION</h2>
+    <p class="right">Tout se règle depuis l'écran Paramètres. Les variables d'environnement servent surtout aux déploiements serveur.</p>
+  </div>
+
+  <h3 style="font-size:17px;font-weight:800;letter-spacing:.04em;margin-bottom:18px">DEPUIS L'INTERFACE</h3>
+  <div class="prose" style="max-width:760px;margin-bottom:38px">
+    <p>Ouvrez <strong>Paramètres</strong>, saisissez l'URL de base et la clé de n'importe quel endpoint compatible OpenAI, puis cliquez sur <strong>Récupérer les modèles</strong> pour lister ceux qui sont disponibles. La clé est conservée dans le stockage local et n'est transmise qu'à l'endpoint indiqué.</p>
+    <p>Le sélecteur <strong>Modèle Whisper</strong> détermine la qualité de la transcription locale : <code>tiny</code> et <code>base</code> sont rapides, <code>large-v3</code> est nettement plus précis mais plus lent et plus lourd à télécharger.</p>
+  </div>
+
+  <h3 style="font-size:17px;font-weight:800;letter-spacing:.04em;margin-bottom:18px">VARIABLES D'ENVIRONNEMENT</h3>
+  <div class="table-wrap">
+    <table class="t">
+      <tr><th>Variable</th><th>Rôle</th><th>Défaut</th></tr>
+      <tr><td class="mono">OPENAI_API_KEY</td><td>Clé par défaut côté serveur, facultative si elle est saisie dans l'interface.</td><td class="mono">—</td></tr>
+      <tr><td class="mono">OPENAI_BASE_URL</td><td>Endpoint compatible OpenAI.</td><td class="mono">https://api.openai.com/v1</td></tr>
+      <tr><td class="mono">HOST / PORT</td><td>Adresse d'écoute du serveur.</td><td class="mono">0.0.0.0 / 8000</td></tr>
+      <tr><td class="mono">WHISPER_MODEL_SIZE</td><td>Modèle local par défaut : tiny, base, small, medium, large-v3, large-v3-turbo.</td><td class="mono">base</td></tr>
+      <tr><td class="mono">UPLOAD_MAX_MB</td><td>Taille maximale d'un fichier importé.</td><td class="mono">200</td></tr>
+      <tr><td class="mono">VIDEO_MAX_HEIGHT</td><td>Hauteur maximale de la vidéo originale téléchargée.</td><td class="mono">720</td></tr>
+      <tr><td class="mono">ENABLE_DIARIZATION<br>HF_TOKEN</td><td>Active l'identification des locuteurs via pyannote-audio.</td><td class="mono">désactivé</td></tr>
+      <tr><td class="mono">CHAT_TRANSCRIPT_MAX_CHARS</td><td>Longueur maximale du transcript envoyé au chat.</td><td class="mono">48000</td></tr>
+      <tr><td class="mono">AVT_DATA_DIR</td><td>Racine des données : historique des transcriptions, modèles, fichiers de travail.</td><td class="mono">dossier du projet<br><span class="muted">%LOCALAPPDATA% en desktop</span></td></tr>
+      <tr><td class="mono">AVT_TOKEN</td><td>Jeton d'accès local exigé par l'API. Injecté par l'application installée à chaque lancement ; non défini, l'API est ouverte et les origines tierces autorisées.</td><td class="mono">non défini</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ── API ───────────────────────────────────────────────────────────── -->
+<section class="section" id="api">
+  <div class="section-head">
+    <h2 class="h-section">API HTTP</h2>
+    <p class="right">Le serveur expose le pipeline complet et l'historique. L'interface web n'est qu'un client parmi d'autres. Dans l'application installée, chaque appel doit porter le jeton de session.</p>
+  </div>
+  <div class="table-wrap">
+    <table class="t">
+      <tr><th>Méthode</th><th>Route</th><th>Rôle</th></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/process-video</td><td>Lance le pipeline sur une URL et renvoie un identifiant de tâche.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/process-upload</td><td>Même chose à partir d'un fichier téléversé.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/task-stream/{id}</td><td>Flux SSE : progression, étape courante, messages du serveur.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/task-status/{id}</td><td>État instantané d'une tâche, pour les clients sans SSE.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/history</td><td>Liste compacte des tâches terminées, plus récentes d'abord.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/download/{fichier}</td><td>Récupère un livrable : transcription, résumé, SRT, VTT.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/media/{fichier}</td><td>Diffuse le média original, avec support des requêtes Range.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/chat</td><td>Question-réponse ancrée dans une transcription terminée.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/models</td><td>Interroge l'endpoint configuré et liste ses modèles.</td></tr>
+      <tr><td class="mono">DELETE</td><td class="mono">/api/task/{id}</td><td>Supprime une tâche et ses fichiers.</td></tr>
+      <tr><td class="mono">WS</td><td class="mono">/ws/live-local</td><td>Transcription micro en direct, entièrement locale.</td></tr>
+      <tr><td class="mono">WS</td><td class="mono">/ws/live-transcribe</td><td>Transcription micro en direct via l'API Realtime d'OpenAI.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/library</td><td>Liste paginée de l'historique.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/library/stats</td><td>Nombre d'entrées, place occupée, part des médias, favoris.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/library/{id}</td><td>Une entrée complète : métadonnées et textes.</td></tr>
+      <tr><td class="mono">PATCH</td><td class="mono">/api/library/{id}</td><td>Renommer, mettre en favori.</td></tr>
+      <tr><td class="mono">DELETE</td><td class="mono">/api/library/{id}</td><td>Supprimer une entrée et ses fichiers.</td></tr>
+      <tr><td class="mono">GET</td><td class="mono">/api/library/{id}/asset/{kind}</td><td>Audio, sous-titres ou transcription brute d'une entrée.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/library/free-space</td><td>Libère de la place en retirant les médias, en gardant les textes.</td></tr>
+      <tr><td class="mono">POST</td><td class="mono">/api/library/import</td><td>Importe des entrées existantes dans l'historique.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ── Agents ────────────────────────────────────────────────────────── -->
+<section class="section section-dark" id="agents">
+  <div class="section-head">
+    <div>
+      <div class="kicker" style="margin-bottom:12px;color:var(--acid)">Automatisation</div>
+      <h2 class="h-section">DEPUIS VOS AGENTS<br>ET VOS SCRIPTS.</h2>
+    </div>
+    <p class="right" style="color:var(--d-mute)">Le dépôt embarque un serveur MCP et une compétence prête à l'emploi.</p>
+  </div>
+  <div class="grid-2">
+    <div class="card card-dark">
+      <h3>SERVEUR MCP</h3>
+      <p>Le pipeline est exposé comme un outil MCP en stdio : Claude Code, Claude Desktop ou Codex l'appellent nativement, sans bricoler de commandes shell.</p>
+      <div class="code"><span class="c"># Claude Code</span>
+claude mcp add video-transcriber \
+  -- /chemin/venv/bin/python /chemin/mcp_server.py</div>
+      <p>Prérequis : <code>pip install "mcp&gt;=2.0"</code>.</p>
+    </div>
+    <div class="card card-dark">
+      <h3>LIGNE DE COMMANDE</h3>
+      <p>Le même orchestrateur est disponible en CLI — c'est d'ailleurs celui que le serveur MCP réutilise, pour éviter deux implémentations.</p>
+      <div class="code">python transcribe.py &lt;url&gt; --lang fr</div>
+      <p>Une compétence <code>video-transcribe</code> est fournie dans <code>skills/</code> : copiez-la dans <code>~/.claude/skills/</code> pour l'utiliser partout.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ───────────────────────────────────────────────────────────── -->
+<section class="section">
+  <div class="section-head"><h2 class="h-section">QUESTIONS FRÉQUENTES</h2></div>
+  <details class="faq">
+    <summary>Faut-il obligatoirement une clé API ?</summary>
+    <div class="a">Non. La transcription fonctionne sans clé grâce à faster-whisper, et les sous-titres natifs ne demandent aucun modèle. La clé sert à l'optimisation du texte, à la traduction, au résumé structuré et au chat génératif — sans elle, ces fonctions basculent sur des équivalents locaux plus modestes.</div>
+  </details>
+  <details class="faq">
+    <summary>Pourquoi certaines vidéos sont-elles traitées en quelques secondes ?</summary>
+    <div class="a">Parce qu'elles ont des sous-titres natifs. Dans ce cas, aucun audio n'est téléchargé ni transcrit : le texte est récupéré directement, puis passé au reste du pipeline. Whisper n'intervient qu'en repli.</div>
+  </details>
+  <details class="faq">
+    <summary>Quel modèle Whisper choisir ?</summary>
+    <div class="a"><span class="mono">base</span> est un bon compromis par défaut. <span class="mono">large-v3-turbo</span> améliore nettement la précision sur les audios difficiles, au prix d'un téléchargement plus lourd et d'un traitement plus lent sur processeur.</div>
+  </details>
+  <details class="faq">
+    <summary>Le serveur peut-il être partagé dans une équipe ?</summary>
+    <div class="a">Oui, c'est l'usage prévu de l'édition Docker. Attention toutefois : l'application n'a ni comptes ni authentification. Ne l'exposez pas sur Internet sans placer devant un reverse proxy avec authentification.</div>
+  </details>
+  <details class="faq">
+    <summary>L'API locale est-elle protégée ?</summary>
+    <div class="a">Dans l'application installée, oui : Electron génère un jeton à chaque lancement, l'API le réclame, les en-têtes CORS permissifs ont disparu et une requête portant un nom d'hôte non-bouclé reçoit un 403. Lancé depuis les sources ou en Docker sans <span class="mono">AVT_TOKEN</span>, le serveur reste ouvert — c'est pratique en développement, à ne pas exposer tel quel.</div>
+  </details>
+  <details class="faq">
+    <summary>Un téléchargement de modèle échoue, que faire ? <span class="soon">prochaine version</span></summary>
+    <div class="a">L'application explique la cause en français et indique quoi faire, au lieu d'afficher le message technique du téléchargeur. Le module qui récupère les vidéos se met par ailleurs à jour tout seul, sans réinstaller l'application : quand un site change son fonctionnement du jour au lendemain, vous n'avez plus à attendre une nouvelle version.</div>
+  </details>
+  <details class="faq">
+    <summary>Comment persister les fichiers avec Docker ?</summary>
+    <div class="a">Décommentez le bloc <span class="mono">volumes</span> de <span class="mono">docker-compose.yml</span> pour monter <span class="mono">/app/temp</span> sur l'hôte. Sans cela, les transcriptions disparaissent avec le conteneur.</div>
+  </details>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="mark">TRANSCRIBER</div>
+      <p>Transcrire, résumer, archiver. Sur votre machine ou sur votre serveur.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <div class="h">Produit</div>
+        <a href="fonctionnalites.html">Fonctionnalités</a>
+        <a href="telecharger.html">Télécharger</a>
+        <a href="plateformes.html">Plateformes</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Développeurs</div>
+        <a href="docs.html">Documentation</a>
+        <a href="docs.html#api">API</a>
+        <a href="docs.html#docker">Auto-hébergement</a>
+        <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Légal</div>
+        <a href="confidentialite.html">Confidentialité</a>
+        <a href="confidentialite.html#donnees">Données</a>
+        <a href="https://www.apache.org/licenses/LICENSE-2.0">Licence Apache 2.0</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 TRANSCRIBER</div>
+    <div>V1.1.0 · LOGICIEL LIBRE</div>
+  </div>
+</footer>
+
+</body>
+</html>

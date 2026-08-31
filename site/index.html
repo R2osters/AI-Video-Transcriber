@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transcriber — transcrire, résumer, archiver. Sur votre machine.</title>
+<meta name="description" content="Logiciel installable de transcription : collez une URL ou déposez un fichier, obtenez la transcription, le résumé et les sous-titres. Windows, Docker ou code source. Vos fichiers restent chez vous.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Aller au contenu</a>
+
+<!-- ── Barre utilitaire ──────────────────────────────────────────────── -->
+<div class="utility">
+  <div>LOGICIEL INSTALLABLE — WINDOWS · DOCKER · CODE SOURCE — GRATUIT</div>
+  <div class="utility-links">
+    <a href="telecharger.html">TÉLÉCHARGER</a>
+    <a href="docs.html">DOCS</a>
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GITHUB</a>
+  </div>
+</div>
+
+<!-- ── Navigation ────────────────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="nav-left">
+    <a href="fonctionnalites.html">Produit</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="plateformes.html">Plateformes</a>
+    <a href="docs.html">Docs</a>
+  </div>
+  <div class="nav-mark"><a href="index.html">TRANSCRIBER</a></div>
+  <div class="nav-right">
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+    <a class="nav-cta" href="telecharger.html">Télécharger</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<!-- ── Hero ──────────────────────────────────────────────────────────── -->
+<section style="position:relative;background:var(--paper);padding:34px var(--pad) 44px;overflow:hidden">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap">
+    <div style="display:flex;flex-direction:column;gap:14px;z-index:3">
+      <h1 style="font-size:11.5px;font-weight:600;letter-spacing:.28em;line-height:2">DES HEURES<br>D'ÉCOUTE<br>EN QUELQUES<br>MINUTES.</h1>
+      <div class="rule-tick"></div>
+    </div>
+    <div class="mono" style="text-align:right;font-size:10px;letter-spacing:.16em;color:var(--mute);line-height:1.9;z-index:3">
+      VERSION 1.1.0<br>1 700+ SITES<br>11 LANGUES
+    </div>
+  </div>
+
+  <div style="position:relative;margin-top:14px;height:clamp(230px,32vw,400px)">
+    <div aria-hidden="true" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(46px,19.5vw,270px);font-weight:800;letter-spacing:-.045em;line-height:.8;white-space:nowrap;z-index:1">ÉCOUTEZ<span style="color:var(--acid)">.</span></div>
+    <div style="position:absolute;left:50%;transform:translateX(-50%);bottom:0;height:100%;aspect-ratio:1/1;z-index:2;background:var(--ink);box-shadow:0 30px 70px -30px rgba(14,14,14,.5);display:flex;flex-direction:column;padding:24px 26px;background-image:radial-gradient(circle,rgba(239,237,232,.07) 1px,transparent 1px);background-size:7px 7px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--acid)"></span>
+          <span class="mono" style="font-size:9.5px;letter-spacing:.2em;color:var(--d-text)">REC</span>
+        </div>
+        <span class="mono" style="font-size:9.5px;letter-spacing:.14em;color:var(--d-faint)">00:12:04</span>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center">
+        <svg viewBox="0 0 240 120" style="width:100%;height:auto" fill="none" aria-hidden="true">
+          <rect x="4" y="48" width="5" height="24" fill="#EFEDE8"/><rect x="14" y="38" width="5" height="44" fill="#EFEDE8"/><rect x="24" y="52" width="5" height="16" fill="#EFEDE8"/><rect x="34" y="30" width="5" height="60" fill="#EFEDE8"/><rect x="44" y="44" width="5" height="32" fill="#EFEDE8"/><rect x="54" y="20" width="5" height="80" fill="#EFEDE8"/><rect x="64" y="40" width="5" height="40" fill="#EFEDE8"/><rect x="74" y="10" width="5" height="100" fill="#EFEDE8"/><rect x="84" y="34" width="5" height="52" fill="#EFEDE8"/><rect x="94" y="24" width="5" height="72" fill="#EFEDE8"/><rect x="104" y="46" width="5" height="28" fill="#EFEDE8"/><rect x="114" y="6" width="5" height="108" fill="#0FF302"/><rect x="124" y="36" width="5" height="48" fill="#EFEDE8"/><rect x="134" y="18" width="5" height="84" fill="#EFEDE8"/><rect x="144" y="42" width="5" height="36" fill="#EFEDE8"/><rect x="154" y="28" width="5" height="64" fill="#EFEDE8"/><rect x="164" y="50" width="5" height="20" fill="#EFEDE8"/><rect x="174" y="22" width="5" height="76" fill="#EFEDE8"/><rect x="184" y="44" width="5" height="32" fill="#EFEDE8"/><rect x="194" y="34" width="5" height="52" fill="#EFEDE8"/><rect x="204" y="52" width="5" height="16" fill="#EFEDE8"/><rect x="214" y="40" width="5" height="40" fill="#EFEDE8"/><rect x="224" y="48" width="5" height="24" fill="#EFEDE8"/><rect x="234" y="54" width="4" height="12" fill="#EFEDE8"/>
+        </svg>
+      </div>
+      <div class="mono" style="font-size:10.5px;line-height:1.9;color:#A8A49B"><span style="color:var(--d-faint)">[02:14]</span> accepter d'être mauvais au début<span style="display:inline-block;width:6px;height:12px;background:var(--acid);vertical-align:text-bottom;margin-left:3px;animation:blink 1s step-end infinite"></span></div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-top:22px;position:relative;z-index:3;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:28px;flex-wrap:wrap">
+      <a class="btn btn-dark" href="telecharger.html">Installer le logiciel</a>
+      <a class="btn btn-ghost" href="fonctionnalites.html">Voir l'application</a>
+    </div>
+    <div style="text-align:right;display:flex;flex-direction:column;gap:8px;align-items:flex-end">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.24em;line-height:1.9">COLLEZ UNE URL<br>OU DÉPOSEZ<br>UN FICHIER</div>
+      <div class="rule-tick"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Bandeau plateformes ───────────────────────────────────────────── -->
+<div class="strip">
+  <div class="strip-grid">
+    <div class="strip-label">FONCTIONNE<br>AVEC</div>
+    <div class="strip-cell">YOUTUBE</div>
+    <div class="strip-cell">TIKTOK</div>
+    <div class="strip-cell">BILIBILI</div>
+    <div class="strip-cell">APPLE PODCASTS</div>
+    <div class="strip-cell">SOUNDCLOUD</div>
+    <div class="strip-cell">VIMEO</div>
+    <div class="strip-cell"><a href="plateformes.html" style="color:var(--acid)">+ 1 700 AUTRES</a></div>
+  </div>
+</div>
+
+<!-- ── Logiciel installable ──────────────────────────────────────────── -->
+<section class="section section-alt split wide-right" id="installable">
+  <div style="display:flex;flex-direction:column;gap:24px">
+    <div class="eyebrow">Logiciel installable</div>
+    <h2 class="h-display">UN LOGICIEL.<br>PAS UN<br>ONGLET.</h2>
+    <p class="lede" style="max-width:380px">Un installeur Windows classique : double-clic, raccourci dans le menu Démarrer, fenêtre à part. Le moteur de transcription, FFmpeg et Whisper sont embarqués — aucune ligne de commande, aucun compte à créer.</p>
+    <div class="tag-list">
+      <span class="tag">Windows · installeur .exe</span>
+      <span class="tag">Docker · une commande</span>
+      <span class="tag">Code source · Python</span>
+    </div>
+    <div style="display:flex;gap:26px;align-items:center;flex-wrap:wrap">
+      <a class="btn btn-dark" href="telecharger.html">Télécharger</a>
+      <a class="btn btn-ghost" href="docs.html#install">Voir l'installation</a>
+    </div>
+  </div>
+  <figure class="shot win">
+    <div class="shot-bar">
+      <div class="win-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+        AI Video Transcriber
+      </div>
+      <div class="win-btns" aria-hidden="true"><span>—</span><span>▢</span><span>✕</span></div>
+    </div>
+    <img src="assets/img/app-new.png" width="2880" height="1800" alt="Fenêtre de l'application : champ URL, zone de dépôt de fichier, choix du modèle Whisper et de la langue du résumé." loading="lazy">
+    <figcaption class="shot-cap"><span>ÉCRAN D'ACCUEIL · CAPTURE RÉELLE</span><span>V1.1.0 · WINDOWS</span></figcaption>
+  </figure>
+</section>
+
+<!-- ── Trois publics ─────────────────────────────────────────────────── -->
+<section class="section-tight section-dark trio">
+  <div style="display:flex;gap:22px;align-items:center">
+    <div aria-hidden="true" style="width:104px;height:132px;flex:none;background:var(--paper);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background-image:radial-gradient(circle,rgba(14,14,14,.12) 1px,transparent 1px);background-size:6px 6px">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="#0E0E0E"><path d="M8 5v14l11-7z"/></svg>
+      <span class="mono" style="font-size:9px;letter-spacing:.14em;color:var(--ink)">18:42</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <h3 style="font-size:19px;font-weight:800;letter-spacing:.06em;color:var(--d-text)">CRÉATEURS</h3>
+      <p style="font-size:12.5px;line-height:1.6;color:var(--d-mute)">Recyclez une vidéo en article, en newsletter, en script.</p>
+      <a href="fonctionnalites.html#exports" style="font-size:10px;font-weight:600;letter-spacing:.18em;color:var(--d-text);border-bottom:1.2px solid #4A4842;padding-bottom:4px;align-self:flex-start">DÉCOUVRIR →</a>
+    </div>
+  </div>
+  <div style="display:flex;gap:22px;align-items:center">
+    <div aria-hidden="true" style="width:104px;height:132px;flex:none;background:var(--paper);display:flex;flex-direction:column;justify-content:center;gap:7px;padding:0 14px">
+      <span style="height:3px;background:var(--ink);width:80%"></span>
+      <span style="height:3px;background:var(--ink);width:100%"></span>
+      <span style="height:3px;background:var(--acid);width:64%"></span>
+      <span style="height:3px;background:var(--ink);width:90%"></span>
+      <span style="height:3px;background:var(--ink);width:72%"></span>
+      <span style="height:3px;background:var(--ink);width:96%"></span>
+      <span style="height:3px;background:var(--ink);width:44%"></span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <h3 style="font-size:19px;font-weight:800;letter-spacing:.06em;color:var(--d-text)">CHERCHEURS</h3>
+      <p style="font-size:12.5px;line-height:1.6;color:var(--d-mute)">Des heures de conférences, citables et cherchables.</p>
+      <a href="fonctionnalites.html#historique" style="font-size:10px;font-weight:600;letter-spacing:.18em;color:var(--d-text);border-bottom:1.2px solid #4A4842;padding-bottom:4px;align-self:flex-start">DÉCOUVRIR →</a>
+    </div>
+  </div>
+  <div style="display:flex;gap:22px;align-items:center">
+    <div aria-hidden="true" style="width:104px;height:132px;flex:none;background:var(--paper);display:flex;flex-direction:column;justify-content:center;gap:10px;padding:0 13px">
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:6px;height:6px;border-radius:50%;background:var(--ink);flex:none"></i><i class="mono" style="font-size:8.5px;font-style:normal;color:var(--ink)">[00:04] A—</i></span>
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:6px;height:6px;border-radius:50%;background:var(--acid);flex:none"></i><i class="mono" style="font-size:8.5px;font-style:normal;color:var(--ink)">[00:11] B—</i></span>
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:6px;height:6px;border-radius:50%;background:var(--ink);flex:none"></i><i class="mono" style="font-size:8.5px;font-style:normal;color:var(--ink)">[00:26] A—</i></span>
+      <span style="display:flex;align-items:center;gap:7px"><i style="width:6px;height:6px;border-radius:50%;border:1.2px solid var(--ink);flex:none"></i><i class="mono" style="font-size:8.5px;font-style:normal;color:var(--faint)">[00:38] C—</i></span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:9px">
+      <h3 style="font-size:19px;font-weight:800;letter-spacing:.06em;color:var(--d-text)">ÉQUIPES</h3>
+      <p style="font-size:12.5px;line-height:1.6;color:var(--d-mute)">Réunions et interviews, résumées avant la fin du café.</p>
+      <a href="fonctionnalites.html#locuteurs" style="font-size:10px;font-weight:600;letter-spacing:.18em;color:var(--d-text);border-bottom:1.2px solid #4A4842;padding-bottom:4px;align-self:flex-start">DÉCOUVRIR →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Temps réel ────────────────────────────────────────────────────── -->
+<section id="produit" class="split flush" style="background:var(--paper-2)">
+  <div style="padding:74px var(--pad);display:flex;flex-direction:column;justify-content:center;gap:24px">
+    <div class="eyebrow">Temps réel</div>
+    <h2 class="h-display">LE TEXTE<br>ARRIVE<br>AVANT<br>LA FIN.</h2>
+    <p class="lede" style="max-width:360px">Le backend streame chaque étape en SSE. Vous voyez les mots se poser pendant que la machine travaille — pas dix minutes plus tard.</p>
+    <a class="btn btn-dark" href="#pipeline" style="align-self:flex-start">Voir le pipeline</a>
+  </div>
+  <figure style="position:relative;overflow:hidden;background:var(--ink);margin:0">
+    <img src="assets/img/app-progress.png" width="2880" height="1800" alt="Écran de progression : les étapes téléchargement, transcription et optimisation IA à 64 %, avec le flux SSE qui défile à droite." loading="lazy" style="width:100%;height:100%;min-height:520px;object-fit:cover;object-position:right top">
+  </figure>
+</section>
+
+<!-- ── Quatre arguments ──────────────────────────────────────────────── -->
+<div class="args">
+  <div class="arg">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>
+    <div><div class="arg-t">SOUS-TITRES D'ABORD</div><div class="arg-d">Whisper seulement en repli</div></div>
+  </div>
+  <div class="arg">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+    <div><div class="arg-t">EXPORTS PROPRES</div><div class="arg-d">SRT · VTT · TXT · MD</div></div>
+  </div>
+  <div class="arg">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+    <div><div class="arg-t">VOTRE CLÉ</div><div class="arg-d">Endpoint compatible OpenAI</div></div>
+  </div>
+  <div class="arg">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0E0E0E" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9S14.5 18.3 12 21c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg>
+    <div><div class="arg-t">11 LANGUES</div><div class="arg-d">Résumé dans la vôtre</div></div>
+  </div>
+</div>
+
+<!-- ── Pipeline ──────────────────────────────────────────────────────── -->
+<section class="section" id="pipeline" style="padding-bottom:20px">
+  <div class="section-head">
+    <h2 class="h-section">LE PIPELINE</h2>
+    <p class="right">Sous-titres natifs quand ils existent, Whisper sinon. Le chemin le plus court est choisi pour vous.</p>
+  </div>
+  <div class="rows">
+    <div class="row">
+      <div class="row-num">01</div>
+      <h3 class="row-name">TÉLÉCHARGEMENT</h3>
+      <p class="row-desc">Récupération du média depuis l'URL ou l'upload local — jusqu'à 200 Mo par fichier.</p>
+      <div class="row-meta">~7 S</div>
+    </div>
+    <div class="row">
+      <div class="row-num">02</div>
+      <h3 class="row-name">TRANSCRIPTION</h3>
+      <p class="row-desc">Sous-titres natifs détectés, sinon faster-whisper en repli automatique.</p>
+      <div class="row-meta">~3 S</div>
+    </div>
+    <div class="row is-dark">
+      <div class="row-num">03</div>
+      <h3 class="row-name">OPTIMISATION IA</h3>
+      <p class="row-desc">Ponctuation, paragraphes, corrections. Le texte devient lisible.</p>
+      <div class="row-meta">EN COURS · 64%</div>
+    </div>
+    <div class="row">
+      <div class="row-num">04</div>
+      <h3 class="row-name">TRADUCTION</h3>
+      <p class="row-desc">Conditionnelle : déclenchée seulement si la langue diffère de la vôtre.</p>
+      <div class="row-meta">EN ATTENTE</div>
+    </div>
+    <div class="row">
+      <div class="row-num">05</div>
+      <h3 class="row-name">RÉSUMÉ</h3>
+      <p class="row-desc">Multilingue, structuré, prêt à coller dans un doc ou un message.</p>
+      <div class="row-meta">EN ATTENTE</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── L'application ─────────────────────────────────────────────────── -->
+<section class="section">
+  <div class="section-head">
+    <h2 class="h-section">L'APPLICATION</h2>
+    <a class="btn btn-ghost" href="fonctionnalites.html">Tout voir</a>
+  </div>
+  <div class="showcase">
+    <figure class="shot" style="margin:0">
+      <div class="shot-bar">
+        <div class="shot-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="shot-url">transcriber · résultat · how-to-learn-anything</div>
+      </div>
+      <img src="assets/img/app-results.png" width="2880" height="1800" alt="Écran de résultat : transcription horodatée à gauche, carte pipeline et chat sur transcription à droite, boutons SRT, VTT, Copier et Télécharger en haut." loading="lazy">
+      <figcaption class="shot-cap"><span>TRANSCRIPTION HORODATÉE · SRT · VTT</span><span>CAPTURE RÉELLE</span></figcaption>
+    </figure>
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <figure class="shot" style="margin:0">
+        <img src="assets/img/app-history.png" width="2880" height="1800" alt="Écran historique : transcriptions groupées par jour, chacune avec sa plateforme, sa paire de langues et une étoile de favori. En pied de liste, le nombre de transcriptions et l'espace occupé sur le disque." loading="lazy">
+        <figcaption class="shot-cap"><span>HISTORIQUE SUR VOTRE DISQUE</span><span>FAVORIS · RECHERCHE ⌘K</span></figcaption>
+      </figure>
+      <div class="card card-dark">
+        <h3>EXPORTS</h3>
+        <div class="tag-list">
+          <span class="tag tag-d">SRT</span>
+          <span class="tag tag-d">VTT</span>
+          <span class="tag tag-d">TXT</span>
+          <span class="tag tag-acid">MD</span>
+        </div>
+        <p>Les sous-titres horodatés sont générés dès que le chemin Whisper est emprunté.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Parti pris ────────────────────────────────────────────────────── -->
+<section class="section section-dark split quote">
+  <div aria-hidden="true" style="height:340px;position:relative;overflow:hidden;background:var(--paper)">
+    <div style="position:absolute;inset:0;background-image:radial-gradient(circle,rgba(14,14,14,.14) 1.2px,transparent 1.2px);background-size:7px 7px"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+      <div style="font-size:230px;font-weight:800;line-height:1;color:var(--ink);margin-top:-30px">”</div>
+    </div>
+    <div style="position:absolute;left:22px;bottom:18px;display:flex;align-items:center;gap:9px">
+      <span style="width:8px;height:8px;border-radius:50%;background:var(--acid)"></span>
+      <span class="mono" style="font-size:9.5px;letter-spacing:.2em;color:var(--ink)">PARTI PRIS · LOCAL D'ABORD</span>
+    </div>
+    <div class="mono" style="position:absolute;right:22px;top:18px;font-size:9.5px;letter-spacing:.14em;color:var(--faint)">APACHE 2.0</div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:26px">
+    <p style="font-size:clamp(28px,3.6vw,46px);line-height:1.12;font-weight:700;letter-spacing:-.025em;color:var(--d-text)">« Vos fichiers ne quittent pas votre machine. Le seul texte qui sort, c'est celui que <span style="color:var(--acid)">vous</span> envoyez à votre propre modèle. »</p>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.16em;color:var(--d-text)">PRINCIPE DE CONCEPTION</div>
+      <a class="mono" href="confidentialite.html" style="font-size:10.5px;letter-spacing:.1em;color:var(--d-faint)">CE QUI SORT, CE QUI RESTE →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Éditions ──────────────────────────────────────────────────────── -->
+<section class="section" id="editions">
+  <div class="section-head">
+    <h2 class="h-section">ÉDITIONS</h2>
+    <p class="right">Trois façons de l'installer. Aucune n'est payante : vous payez vos propres appels de modèle, rien d'autre.</p>
+  </div>
+  <div class="editions">
+    <div style="padding:36px 30px 36px 0;display:flex;flex-direction:column;gap:22px;border-right:1px solid var(--rule)">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.2em;color:var(--mute)">CODE SOURCE</div>
+      <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:52px;font-weight:800;letter-spacing:-.04em;line-height:1">LIBRE</div></div>
+      <ul style="display:flex;flex-direction:column;gap:9px;font-size:13px;color:#3A3834">
+        <li>Python 3.8+ · FastAPI</li>
+        <li>Whisper local ou clé API</li>
+        <li>Serveur MCP inclus</li>
+        <li>Licence Apache 2.0</li>
+      </ul>
+      <a class="btn btn-ghost" href="docs.html#source" style="margin-top:auto">Installer depuis les sources →</a>
+    </div>
+    <div style="padding:36px 30px;display:flex;flex-direction:column;gap:22px;border-right:1px solid var(--rule);background:var(--ink);color:var(--d-text)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.2em;color:var(--d-mute)">WINDOWS</div>
+        <div class="mono" style="font-size:9.5px;letter-spacing:.14em;color:var(--acid)">RECOMMANDÉ</div>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:52px;font-weight:800;letter-spacing:-.04em;line-height:1">.EXE</div></div>
+      <ul style="display:flex;flex-direction:column;gap:9px;font-size:13px;color:#A8A49B">
+        <li>Installeur classique, double-clic</li>
+        <li>FFmpeg et Whisper embarqués</li>
+        <li>Aucune installation de Python</li>
+        <li>Fonctionne sans clé API</li>
+      </ul>
+      <a class="btn btn-acid" href="telecharger.html" style="margin-top:auto;align-self:flex-start">Télécharger</a>
+    </div>
+    <div style="padding:36px 0 36px 30px;display:flex;flex-direction:column;gap:22px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.2em;color:var(--mute)">AUTO-HÉBERGÉ</div>
+      <div style="display:flex;align-items:baseline;gap:8px"><div style="font-size:52px;font-weight:800;letter-spacing:-.04em;line-height:1">DOCKER</div></div>
+      <ul style="display:flex;flex-direction:column;gap:9px;font-size:13px;color:#3A3834">
+        <li>Une commande, image unique</li>
+        <li>Whisper local, vLLM, Ollama</li>
+        <li>Aucune donnée ne sort du réseau</li>
+        <li>Accessible à toute l'équipe</li>
+      </ul>
+      <a class="btn btn-ghost" href="docs.html#docker" style="margin-top:auto">Voir la commande →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ───────────────────────────────────────────────────────────── -->
+<section style="background:var(--paper);padding:20px var(--pad) 0">
+  <div style="background:var(--ink);padding:74px 44px;display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center">
+    <p style="font-size:clamp(48px,10vw,104px);line-height:.9;font-weight:800;letter-spacing:-.045em;color:var(--d-text)">INSTALLEZ.<br>COLLEZ.<br>LISEZ.</p>
+    <p style="font-size:15px;line-height:1.6;color:var(--d-mute);max-width:440px">La vidéo que vous n'aurez jamais le temps de regarder, résumée avant la fin de votre café — sur votre machine.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px">
+      <a class="btn btn-acid" href="telecharger.html">Télécharger pour Windows</a>
+      <a class="btn btn-outline-d" href="docs.html#docker">Lancer avec Docker</a>
+    </div>
+    <div class="mono" style="font-size:10px;letter-spacing:.16em;color:var(--d-faint)">GRATUIT · SANS COMPTE · APACHE 2.0</div>
+  </div>
+</section>
+
+</main>
+
+<!-- ── Pied de page ──────────────────────────────────────────────────── -->
+<footer class="footer" id="docs">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="mark">TRANSCRIBER</div>
+      <p>Transcrire, résumer, archiver. Sur votre machine ou sur votre serveur.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <div class="h">Produit</div>
+        <a href="fonctionnalites.html">Fonctionnalités</a>
+        <a href="telecharger.html">Télécharger</a>
+        <a href="plateformes.html">Plateformes</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Développeurs</div>
+        <a href="docs.html">Documentation</a>
+        <a href="docs.html#api">API</a>
+        <a href="docs.html#docker">Auto-hébergement</a>
+        <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Légal</div>
+        <a href="confidentialite.html">Confidentialité</a>
+        <a href="confidentialite.html#donnees">Données</a>
+        <a href="https://www.apache.org/licenses/LICENSE-2.0">Licence Apache 2.0</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 TRANSCRIBER</div>
+    <div>V1.1.0 · LOGICIEL LIBRE</div>
+  </div>
+</footer>
+
+</body>
+</html>

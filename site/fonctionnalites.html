@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fonctionnalités — Transcriber</title>
+<meta name="description" content="Sous-titres natifs d'abord, Whisper en repli, suivi SSE en direct, résumé multilingue, exports SRT/VTT, historique conservé sur votre ordinateur, chat sur transcription et micro live.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Aller au contenu</a>
+
+<div class="utility">
+  <div>LOGICIEL INSTALLABLE — WINDOWS · DOCKER · CODE SOURCE — GRATUIT</div>
+  <div class="utility-links">
+    <a href="telecharger.html">TÉLÉCHARGER</a>
+    <a href="docs.html">DOCS</a>
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GITHUB</a>
+  </div>
+</div>
+
+<nav class="nav">
+  <div class="nav-left">
+    <a href="fonctionnalites.html" aria-current="page">Produit</a>
+    <a href="index.html#pipeline">Pipeline</a>
+    <a href="plateformes.html">Plateformes</a>
+    <a href="docs.html">Docs</a>
+  </div>
+  <div class="nav-mark"><a href="index.html">TRANSCRIBER</a></div>
+  <div class="nav-right">
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+    <a class="nav-cta" href="telecharger.html">Télécharger</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<header class="page-head">
+  <div>
+    <div class="eyebrow" style="margin-bottom:18px">L'application, écran par écran</div>
+    <h1>TOUT CE QUE<br>FAIT LE<br>LOGICIEL.</h1>
+  </div>
+  <p class="sub">Toutes les captures de cette page viennent de l'application réelle, dans sa version installable. Rien n'est redessiné pour la vitrine.</p>
+</header>
+
+<!-- ── 01 · Entrée ───────────────────────────────────────────────────── -->
+<section class="section split wide-right" id="entree">
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div class="kicker">01 · Entrée</div>
+    <h2 class="h-section">UNE URL, UN FICHIER,<br>OU VOTRE VOIX.</h2>
+    <div class="prose">
+      <p>Collez le lien d'une vidéo ou d'un podcast, déposez un fichier local, ou parlez directement dans le micro. Le même pipeline traite les trois.</p>
+      <p>Les fichiers acceptés vont du <code>.mp4</code> au <code>.opus</code>, jusqu'à 200 Mo — et un simple <code>.txt</code> est traité comme une transcription déjà faite, prête à être résumée.</p>
+    </div>
+    <div class="tag-list">
+      <span class="tag">URL · 1 700+ sites</span>
+      <span class="tag">Fichier local</span>
+      <span class="tag">Micro live</span>
+      <span class="tag">Texte brut</span>
+    </div>
+  </div>
+  <figure class="shot" style="margin:0">
+    <div class="shot-bar">
+      <div class="shot-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="shot-url">transcriber · nouvelle transcription</div>
+    </div>
+    <img src="assets/img/app-new.png" width="2880" height="1800" alt="Écran d'accueil : champ URL, zone de dépôt de fichier, boutons micro live et enregistrement, sélecteur de modèle Whisper et de langue de résumé." loading="lazy">
+    <figcaption class="shot-cap"><span>ÉCRAN D'ACCUEIL</span><span>MODÈLE WHISPER SÉLECTIONNABLE</span></figcaption>
+  </figure>
+</section>
+
+<!-- ── 02 · Suivi ────────────────────────────────────────────────────── -->
+<section class="section section-alt split wide-left" id="suivi">
+  <figure class="shot" style="margin:0">
+    <div class="shot-bar">
+      <div class="shot-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="shot-url">transcriber · tâche en cours</div>
+    </div>
+    <img src="assets/img/app-progress.png" width="2880" height="1800" alt="Écran de progression : cinq étapes du pipeline, badge « sous-titres natifs », et flux SSE affichant les messages du serveur en direct." loading="lazy">
+    <figcaption class="shot-cap"><span>SUIVI SSE</span><span>BADGE : SOUS-TITRES NATIFS</span></figcaption>
+  </figure>
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div class="kicker">02 · Suivi</div>
+    <h2 class="h-section">VOUS VOYEZ<br>CE QUI SE PASSE.</h2>
+    <div class="prose">
+      <p>Chaque étape remonte en temps réel par <em>server-sent events</em> : téléchargement, transcription, optimisation, traduction, résumé. Le panneau de droite affiche le journal brut du serveur.</p>
+      <p>Un badge indique le chemin emprunté — <strong>sous-titres natifs</strong> quand la plateforme en fournit, <strong>Whisper</strong> sinon. C'est la différence entre trois secondes et plusieurs minutes.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 03 · Résultat ─────────────────────────────────────────────────── -->
+<section class="section" id="resultat">
+  <div class="section-head">
+    <div>
+      <div class="kicker" style="margin-bottom:12px">03 · Résultat</div>
+      <h2 class="h-section">TROIS ONGLETS,<br>UN SEUL TRAITEMENT.</h2>
+    </div>
+    <p class="right">Transcription nettoyée, résumé structuré, traduction conditionnelle. Plus la source, gardée à côté.</p>
+  </div>
+  <div class="grid-2">
+    <figure class="shot" style="margin:0">
+      <img src="assets/img/app-results.png" width="2880" height="1800" alt="Onglet transcription : texte horodaté et paragraphé, carte pipeline avec source, langue, modèle, nombre de mots et durée." loading="lazy">
+      <figcaption class="shot-cap"><span>ONGLET TRANSCRIPTION</span><span>HORODATÉ · PARAGRAPHÉ</span></figcaption>
+    </figure>
+    <figure class="shot" style="margin:0">
+      <img src="assets/img/app-results-summary.png" width="2880" height="1800" alt="Onglet résumé : résumé structuré en points clés généré dans la langue choisie." loading="lazy">
+      <figcaption class="shot-cap"><span>ONGLET RÉSUMÉ</span><span>11 LANGUES</span></figcaption>
+    </figure>
+  </div>
+  <div class="grid-3" style="margin-top:24px">
+    <div class="card">
+      <h3>OPTIMISATION IA</h3>
+      <p>Ponctuation restaurée, phrases complétées, paragraphes reconstruits. Un transcript brut devient un texte lisible.</p>
+    </div>
+    <div class="card">
+      <h3>TRADUCTION CONDITIONNELLE</h3>
+      <p>Déclenchée uniquement si la langue de la source diffère de la langue de résumé demandée. Pas de travail inutile.</p>
+    </div>
+    <div class="card">
+      <h3>VIDÉO ORIGINALE</h3>
+      <p>Téléchargée en parallèle de la transcription, prévisualisée dans la fiche résultat, enregistrable en un clic. Désactivable.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 04 · Exports ──────────────────────────────────────────────────── -->
+<section class="section section-dark" id="exports">
+  <div class="section-head">
+    <div>
+      <div class="kicker" style="margin-bottom:12px;color:var(--acid)">04 · Exports</div>
+      <h2 class="h-section">CE QUI SORT<br>DE LA MACHINE.</h2>
+    </div>
+    <p class="right" style="color:var(--d-mute)">Les sous-titres horodatés sont produits dès que le chemin Whisper est emprunté.</p>
+  </div>
+  <div class="grid-4">
+    <div class="card card-dark"><h3>SRT</h3><p>Sous-titres horodatés, pour les logiciels de montage et les lecteurs vidéo.</p></div>
+    <div class="card card-dark"><h3>VTT</h3><p>Le format sous-titre du web, prêt pour une balise <code>&lt;track&gt;</code>.</p></div>
+    <div class="card card-dark"><h3>TXT</h3><p>Le texte nu, quand il ne doit surtout rien emporter d'autre.</p></div>
+    <div class="card card-dark"><h3>MD</h3><p>Markdown avec titres et paragraphes — à coller dans vos notes.</p></div>
+  </div>
+</section>
+
+<!-- ── 05 · Historique ───────────────────────────────────────────────── -->
+<section class="section split wide-left" id="historique">
+  <figure class="shot" style="margin:0">
+    <div class="shot-bar">
+      <div class="shot-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="shot-url">transcriber · historique</div>
+    </div>
+    <img src="assets/img/app-history.png" width="2880" height="1800" alt="Écran historique : transcriptions groupées par jour, semaine ou mois, chacune avec sa plateforme, sa paire de langues et une étoile de favori. En pied de liste, le nombre de transcriptions et l'espace occupé sur le disque." loading="lazy">
+    <figcaption class="shot-cap"><span>GROUPÉ PAR JOUR · SEMAINE · MOIS</span><span>FAVORIS · RENOMMAGE · RECHERCHE</span></figcaption>
+  </figure>
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div class="kicker">05 · Historique</div>
+    <h2 class="h-section">TOUT RESTE,<br>ET TOUT SE RETROUVE.</h2>
+    <div class="prose">
+      <p>Chaque transcription terminée rejoint un historique groupé par jour, semaine ou mois, cherchable au clavier. Rouvrir une entrée restitue la transcription, le résumé, les sous-titres et l'audio d'origine. Chacune peut être renommée ou mise en favori.</p>
+      <p>Cet historique est conservé sur votre ordinateur, dans un dossier par transcription — et non dans le stockage du navigateur : ni serveur, ni base distante, ni quota qui le vide. Une fois une transcription terminée, sa consultation ne déclenche plus aucun appel réseau ; il se lit entièrement hors ligne, audio compris.</p>
+      <p><strong>Rien n'est supprimé automatiquement</strong> : ni purge par ancienneté, ni rotation. En échange votre historique grossit — comptez environ 1 Mo par minute d'audio conservé, et libérez l'espace quand vous le décidez.</p>
+    </div>
+    <a class="btn btn-ghost" href="confidentialite.html#donnees" style="align-self:flex-start">Où vivent les données →</a>
+  </div>
+</section>
+
+<!-- ── 06 · Au-delà ──────────────────────────────────────────────────── -->
+<section class="section section-alt">
+  <div class="section-head">
+    <div>
+      <div class="kicker" style="margin-bottom:12px">06 · Au-delà de la transcription</div>
+      <h2 class="h-section">QUATRE OUTILS<br>DANS LA MÊME FENÊTRE.</h2>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>CHAT SUR TRANSCRIPTION</h3>
+      <p>Posez une question sur n'importe quelle transcription terminée. Avec une clé API, la réponse est générée par votre modèle en s'appuyant sur le texte. Sans clé, la recherche locale retrouve les passages pertinents.</p>
+    </div>
+    <div class="card">
+      <h3>MICRO LIVE</h3>
+      <p>Parlez, le texte s'écrit. En local via faster-whisper, sans aucune clé — ou via l'API Realtime d'OpenAI si vous en avez une. Utile pour dicter une note ou capter une réunion.</p>
+    </div>
+    <div class="card" id="traduction-locale">
+      <h3>TRADUIRE SANS CLÉ <span class="soon">prochaine version</span></h3>
+      <p>Un modèle de traduction s'installe à la demande depuis les Paramètres, puis travaille sur votre machine. 646 Mo à télécharger une seule fois, et seulement si vous en avez besoin — l'installeur ne grossit pas. Onze langues de destination. La qualité suffit pour comprendre et pour citer ; sur un texte technique ou littéraire, un bon modèle derrière une clé API reste meilleur.</p>
+    </div>
+    <div class="card" id="contenus-prives">
+      <h3>CONTENUS RÉSERVÉS <span class="soon">prochaine version</span></h3>
+      <p>Pour une vidéo qui exige d'être connecté, désignez le navigateur où vous l'êtes déjà : l'application réutilise cette session. Les cookies sont lus localement au moment du téléchargement, ne sont jamais recopiés ailleurs et ne quittent pas votre machine.</p>
+    </div>
+    <div class="card" id="locuteurs">
+      <h3>IDENTIFICATION DES LOCUTEURS</h3>
+      <p>Les segments peuvent être étiquetés <em>Locuteur 1 / 2 / …</em> via pyannote-audio. Fonction optionnelle : elle s'active avec une variable d'environnement et un jeton Hugging Face.</p>
+    </div>
+    <div class="card">
+      <h3>IMPORT MULTIPLE</h3>
+      <p>Déposez plusieurs fichiers d'un coup : ils forment une file d'attente et sont traités l'un après l'autre, avec un statut par fichier.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 07 · Votre modèle ─────────────────────────────────────────────── -->
+<section class="section split wide-right" id="modele">
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div class="kicker">07 · Votre modèle</div>
+    <h2 class="h-section">VOTRE CLÉ,<br>VOTRE ENDPOINT.</h2>
+    <div class="prose">
+      <p>Le logiciel ne fournit pas de modèle : il se branche sur le vôtre. N'importe quel endpoint compatible OpenAI convient — OpenAI, OpenRouter, vLLM, Ollama, une passerelle interne.</p>
+      <p>Renseignez l'URL de base et la clé, cliquez sur <strong>Récupérer les modèles</strong>, choisissez. La clé est stockée localement et n'est jamais envoyée ailleurs qu'à l'endpoint que vous avez indiqué.</p>
+    </div>
+    <div class="tag-list">
+      <span class="tag">OpenAI</span><span class="tag">OpenRouter</span><span class="tag">vLLM</span><span class="tag">Ollama</span><span class="tag">Endpoint privé</span>
+    </div>
+  </div>
+  <figure class="shot" style="margin:0">
+    <div class="shot-bar">
+      <div class="shot-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="shot-url">transcriber · paramètres</div>
+    </div>
+    <img src="assets/img/app-settings.png" width="2880" height="1800" alt="Écran paramètres : URL de base, clé API stockée localement, bouton de récupération des modèles, langue de résumé par défaut, choix du modèle Whisper local, et en bas un panneau Espace disque indiquant le nombre de transcriptions, la place occupée, le chemin du dossier et un bouton Libérer de l'espace." loading="lazy">
+    <figcaption class="shot-cap"><span>ENDPOINT COMPATIBLE OPENAI</span><span>+ PANNEAU ESPACE DISQUE</span></figcaption>
+  </figure>
+</section>
+
+<!-- ── Tableau de synthèse ───────────────────────────────────────────── -->
+<section class="section" style="padding-top:0">
+  <div class="section-head"><h2 class="h-section">EN RÉSUMÉ</h2></div>
+  <div class="table-wrap">
+    <table class="t">
+      <tr><th>Capacité</th><th>Sans clé API</th><th>Avec clé API</th></tr>
+      <tr><td>Transcription</td><td class="mono">faster-whisper local</td><td class="mono">faster-whisper local</td></tr>
+      <tr><td>Sous-titres natifs</td><td class="mono">oui</td><td class="mono">oui</td></tr>
+      <tr><td>Optimisation du texte</td><td class="mono"><span class="muted">nettoyage local</span></td><td class="mono">modèle de langue</td></tr>
+      <tr><td>Résumé</td><td class="mono"><span class="muted">extractif local — sélectionne des phrases, n'en rédige aucune</span></td><td class="mono">11 langues, structuré</td></tr>
+      <tr><td>Traduction</td><td class="mono">modèle local, 646 Mo <span class="soon">prochaine version</span></td><td class="mono">conditionnelle</td></tr>
+      <tr><td>Chat sur transcription</td><td class="mono"><span class="muted">recherche locale — extraits cités</span></td><td class="mono">réponses générées</td></tr>
+      <tr><td>Exports SRT / VTT / TXT / MD</td><td class="mono">oui</td><td class="mono">oui</td></tr>
+    </table>
+  </div>
+</section>
+
+<section style="background:var(--paper);padding:20px var(--pad) 0">
+  <div style="background:var(--ink);padding:64px 44px;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center">
+    <p style="font-size:clamp(38px,7vw,76px);line-height:.92;font-weight:800;letter-spacing:-.045em;color:var(--d-text)">ESSAYEZ-LE<br>SUR VOTRE MACHINE.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
+      <a class="btn btn-acid" href="telecharger.html">Télécharger</a>
+      <a class="btn btn-outline-d" href="docs.html">Documentation</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="mark">TRANSCRIBER</div>
+      <p>Transcrire, résumer, archiver. Sur votre machine ou sur votre serveur.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <div class="h">Produit</div>
+        <a href="fonctionnalites.html">Fonctionnalités</a>
+        <a href="telecharger.html">Télécharger</a>
+        <a href="plateformes.html">Plateformes</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Développeurs</div>
+        <a href="docs.html">Documentation</a>
+        <a href="docs.html#api">API</a>
+        <a href="docs.html#docker">Auto-hébergement</a>
+        <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Légal</div>
+        <a href="confidentialite.html">Confidentialité</a>
+        <a href="confidentialite.html#donnees">Données</a>
+        <a href="https://www.apache.org/licenses/LICENSE-2.0">Licence Apache 2.0</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 TRANSCRIBER</div>
+    <div>V1.1.0 · LOGICIEL LIBRE</div>
+  </div>
+</footer>
+
+</body>
+</html>

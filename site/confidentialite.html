@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confidentialité et données — Transcriber</title>
+<meta name="description" content="Ce qui reste sur votre machine, ce qui en sort, et vers où. Stockage local, clé API, absence de télémétrie et de compte.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Aller au contenu</a>
+
+<div class="utility">
+  <div>LOGICIEL INSTALLABLE — WINDOWS · DOCKER · CODE SOURCE — GRATUIT</div>
+  <div class="utility-links">
+    <a href="telecharger.html">TÉLÉCHARGER</a>
+    <a href="docs.html">DOCS</a>
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GITHUB</a>
+  </div>
+</div>
+
+<nav class="nav">
+  <div class="nav-left">
+    <a href="fonctionnalites.html">Produit</a>
+    <a href="index.html#pipeline">Pipeline</a>
+    <a href="plateformes.html">Plateformes</a>
+    <a href="docs.html">Docs</a>
+  </div>
+  <div class="nav-mark"><a href="index.html">TRANSCRIBER</a></div>
+  <div class="nav-right">
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+    <a class="nav-cta" href="telecharger.html">Télécharger</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<header class="page-head">
+  <div>
+    <div class="eyebrow" style="margin-bottom:18px">Confidentialité</div>
+    <h1>CE QUI SORT.<br>CE QUI RESTE.</h1>
+  </div>
+  <p class="sub">Le logiciel tourne chez vous. Il n'y a pas de serveur central, pas de compte, pas de collecte : la question n'est donc pas « que faisons-nous de vos données », mais « quels appels réseau le logiciel déclenche-t-il ».</p>
+</header>
+
+<!-- ── Trajets réseau ────────────────────────────────────────────────── -->
+<section class="section" id="reseau">
+  <div class="section-head">
+    <h2 class="h-section">LES SEULS APPELS SORTANTS</h2>
+    <p class="right">Six lignes, et une seule conclusion : chaque appel réseau est déclenché par une action de votre part.</p>
+  </div>
+  <div class="rows">
+    <div class="row">
+      <div class="row-num">01</div>
+      <h3 class="row-name">LA PLATEFORME VIDÉO</h3>
+      <p class="row-desc">Quand vous collez une URL, yt-dlp contacte le site concerné pour récupérer les sous-titres ou le média. Rien n'est envoyé d'autre que la requête de téléchargement.</p>
+      <div class="row-meta">SI URL</div>
+    </div>
+    <div class="row">
+      <div class="row-num">02</div>
+      <h3 class="row-name">VOTRE ENDPOINT DE MODÈLE</h3>
+      <p class="row-desc">Le texte de la transcription est envoyé à l'endpoint que vous avez configuré, pour l'optimisation, la traduction, le résumé ou le chat. C'est votre fournisseur, votre clé, votre politique de rétention.</p>
+      <div class="row-meta">SI CLÉ CONFIGURÉE</div>
+    </div>
+    <div class="row">
+      <div class="row-num">03</div>
+      <h3 class="row-name">LE DÉPÔT DE MODÈLES</h3>
+      <p class="row-desc">Au premier usage de la transcription locale, le modèle Whisper choisi est téléchargé depuis Hugging Face, puis conservé sur le disque. Aucun de vos contenus n'est transmis.</p>
+      <div class="row-meta">UNE FOIS</div>
+    </div>
+    <div class="row is-dark">
+      <div class="row-num">04</div>
+      <h3 class="row-name">RIEN À LA CONSULTATION</h3>
+      <p class="row-desc">Une fois la transcription terminée, la relire, la chercher, réécouter son audio ou télécharger ses sous-titres ne déclenche aucun appel réseau. Votre historique se consulte intégralement carte réseau coupée.</p>
+      <div class="row-meta">HORS LIGNE</div>
+    </div>
+    <div class="row">
+      <div class="row-num">05</div>
+      <h3 class="row-name">LES COOKIES DE VOTRE NAVIGATEUR <span class="soon">prochaine version</span></h3>
+      <p class="row-desc">Pour un contenu réservé, vous pouvez désigner un navigateur : l'application lit ses cookies au moment du téléchargement, pour se présenter au site comme vous. Ils sont lus localement, ne sont recopiés nulle part et ne quittent pas la machine — seule la requête au site part.</p>
+      <div class="row-meta">SI VOUS LE DEMANDEZ</div>
+    </div>
+    <div class="row">
+      <div class="row-num">06</div>
+      <h3 class="row-name">RIEN D'AUTRE</h3>
+      <p class="row-desc">Pas de télémétrie, pas d'analytique, pas de vérification de licence, pas de serveur d'authentification. Le code est ouvert : c'est vérifiable.</p>
+      <div class="row-meta">AUCUN</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Données locales ───────────────────────────────────────────────── -->
+<section class="section section-alt" id="donnees">
+  <div class="section-head">
+    <h2 class="h-section">OÙ VIVENT VOS DONNÉES</h2>
+    <p class="right">Sur votre disque, dans des dossiers que vous pouvez ouvrir, copier, sauvegarder ou vider. Rien n'est supprimé sans votre action : ni purge par ancienneté, ni quota. En échange votre historique grossit — comptez environ 1 Mo par minute d'audio conservé.</p>
+  </div>
+  <div class="table-wrap">
+    <table class="t">
+      <tr><th>Donnée</th><th>Emplacement</th><th>Effacement</th></tr>
+      <tr>
+        <td>L'historique : textes, résumés, sous-titres et audio d'origine</td>
+        <td class="mono">%LOCALAPPDATA%\AI-Video-Transcriber\library<br><span class="muted">un dossier par transcription + un index<br>emplacement configurable, le déplacement copie et vérifie avant de supprimer l'ancien<br>(Docker : /app/temp dans le conteneur)</span></td>
+        <td><span class="muted">Jamais automatique. Entrée par entrée, ou « Libérer de l'espace » qui ne retire que l'audio</span></td>
+      </tr>
+      <tr>
+        <td>Modèles Whisper téléchargés</td>
+        <td class="mono">%LOCALAPPDATA%\AI-Video-Transcriber\models</td>
+        <td><span class="muted">Suppression manuelle du dossier</span></td>
+      </tr>
+      <tr>
+        <td>Clé API et préférences</td>
+        <td class="mono">stockage local du navigateur</td>
+        <td><span class="muted">Bouton « Réinitialiser » dans les paramètres</span></td>
+      </tr>
+      <tr>
+        <td>Fichiers de travail</td>
+        <td class="mono">%LOCALAPPDATA%\AI-Video-Transcriber\temp</td>
+        <td><span class="muted">Jetables, vidés en cours de route</span></td>
+      </tr>
+    </table>
+  </div>
+</section>
+
+<!-- ── Précautions ───────────────────────────────────────────────────── -->
+<section class="section" id="precautions">
+  <div class="section-head">
+    <h2 class="h-section">CE QU'IL FAUT SAVOIR</h2>
+    <p class="right">Trois limites à connaître avant de traiter des contenus sensibles.</p>
+  </div>
+  <div class="grid-3">
+    <div class="card">
+      <h3>DEUX MODÈLES D'ACCÈS</h3>
+      <p>Dans l'application installée, un jeton de session est généré à chaque lancement et exigé par l'API : une page web tierce ouverte dans votre navigateur ne peut pas lire votre historique. L'édition Docker, elle, n'a ni comptes ni jeton — sur un réseau partagé, placez un reverse proxy authentifié devant, et ne l'exposez jamais directement sur Internet.</p>
+    </div>
+    <div class="card">
+      <h3>LE TEXTE PART CHEZ VOTRE FOURNISSEUR</h3>
+      <p>Dès qu'une clé est configurée, la transcription transite par l'endpoint choisi. Pour un contenu confidentiel, pointez vers un modèle local — vLLM ou Ollama conviennent — ou travaillez sans clé.</p>
+    </div>
+    <div class="card">
+      <h3>RESPECT DES SOURCES</h3>
+      <p>Transcrire une vidéo ne vous en donne pas les droits. Vérifiez les conditions d'utilisation de la plateforme et le statut de l'œuvre avant de rediffuser un transcript ou un sous-titre.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Licence ───────────────────────────────────────────────────────── -->
+<section class="section section-dark">
+  <div class="split quote">
+    <div class="mono" style="font-size:11px;letter-spacing:.2em;color:var(--acid)">LICENCE APACHE 2.0</div>
+    <div style="display:flex;flex-direction:column;gap:22px">
+      <p style="font-size:clamp(24px,3vw,38px);line-height:1.2;font-weight:700;letter-spacing:-.02em;color:var(--d-text)">Le code est public. Vous pouvez l'auditer, le modifier, le déployer chez vous — y compris en entreprise.</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <a class="btn btn-outline-d" href="https://github.com/wendy7756/AI-Video-Transcriber">Lire le code</a>
+        <a class="btn btn-outline-d" href="https://www.apache.org/licenses/LICENSE-2.0">Texte de la licence</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="mark">TRANSCRIBER</div>
+      <p>Transcrire, résumer, archiver. Sur votre machine ou sur votre serveur.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <div class="h">Produit</div>
+        <a href="fonctionnalites.html">Fonctionnalités</a>
+        <a href="telecharger.html">Télécharger</a>
+        <a href="plateformes.html">Plateformes</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Développeurs</div>
+        <a href="docs.html">Documentation</a>
+        <a href="docs.html#api">API</a>
+        <a href="docs.html#docker">Auto-hébergement</a>
+        <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Légal</div>
+        <a href="confidentialite.html">Confidentialité</a>
+        <a href="confidentialite.html#donnees">Données</a>
+        <a href="https://www.apache.org/licenses/LICENSE-2.0">Licence Apache 2.0</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 TRANSCRIBER</div>
+    <div>V1.1.0 · LOGICIEL LIBRE</div>
+  </div>
+</footer>
+
+</body>
+</html>

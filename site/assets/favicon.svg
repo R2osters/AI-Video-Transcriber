@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Transcriber">
+  <!-- Même marque que l'icône de l'application et que la barre latérale :
+       carré sombre arrondi, quatre barres d'égaliseur, la troisième en vert. -->
+  <rect width="64" height="64" rx="15" fill="#191713"/>
+  <g fill="#F5F3EF">
+    <rect x="9.5"  y="22.4" width="7" height="19.2" rx="3.5"/>
+    <rect x="22.3" y="12.8" width="7" height="38.4" rx="3.5"/>
+    <rect x="47.9" y="27.2" width="7" height="9.6"  rx="3.5"/>
+  </g>
+  <rect x="35.1" y="20.8" width="7" height="22.4" rx="3.5" fill="#0FF302"/>
+</svg>

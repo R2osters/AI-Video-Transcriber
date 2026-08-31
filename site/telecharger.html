@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Télécharger — Transcriber pour Windows</title>
+<meta name="description" content="Installeur Windows de Transcriber : FFmpeg et Whisper embarqués, aucune installation de Python, fonctionne sans clé API. Alternatives Docker et code source.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Aller au contenu</a>
+
+<div class="utility">
+  <div>LOGICIEL INSTALLABLE — WINDOWS · DOCKER · CODE SOURCE — GRATUIT</div>
+  <div class="utility-links">
+    <a href="telecharger.html">TÉLÉCHARGER</a>
+    <a href="docs.html">DOCS</a>
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GITHUB</a>
+  </div>
+</div>
+
+<nav class="nav">
+  <div class="nav-left">
+    <a href="fonctionnalites.html">Produit</a>
+    <a href="index.html#pipeline">Pipeline</a>
+    <a href="plateformes.html">Plateformes</a>
+    <a href="docs.html">Docs</a>
+  </div>
+  <div class="nav-mark"><a href="index.html">TRANSCRIBER</a></div>
+  <div class="nav-right">
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+    <a class="nav-cta" href="telecharger.html" aria-current="page">Télécharger</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<header class="page-head">
+  <div>
+    <div class="eyebrow" style="margin-bottom:18px">Windows · version 1.1.0</div>
+    <h1>UN .EXE.<br>PAS UN<br>ABONNEMENT.</h1>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:22px">
+    <p class="sub">L'installeur embarque tout ce dont le logiciel a besoin : le moteur de transcription, FFmpeg, et faster-whisper pour la transcription locale. Ni Python, ni Docker, ni compte à créer.</p>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <a class="btn btn-dark" href="#obtenir">Obtenir l'installeur</a>
+      <a class="btn btn-ghost" href="#alternatives">Docker & sources</a>
+    </div>
+  </div>
+</header>
+
+<!-- ── Fiche produit ─────────────────────────────────────────────────── -->
+<section class="section split wide-left" style="align-items:start">
+  <figure class="shot win" style="margin:0">
+    <div class="shot-bar">
+      <div class="win-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+        AI Video Transcriber
+      </div>
+      <div class="win-btns" aria-hidden="true"><span>—</span><span>▢</span><span>✕</span></div>
+    </div>
+    <img src="assets/img/app-results.png" width="2880" height="1800" alt="L'application installée affiche une transcription horodatée, la carte pipeline et le chat sur transcription." loading="lazy">
+    <figcaption class="shot-cap"><span>FENÊTRE NATIVE · CAPTURE RÉELLE</span><span>AUCUN NAVIGATEUR À OUVRIR</span></figcaption>
+  </figure>
+
+  <div style="display:flex;flex-direction:column;gap:26px">
+    <div class="table-wrap">
+      <table class="t">
+        <tr><th>Fichier</th><th>Détail</th></tr>
+        <tr><td class="mono">AI Video Transcriber Setup 1.1.0.exe</td><td><span class="muted">Installeur NSIS · 218,4 Mo à télécharger.<br>C'est la version que vous obtenez aujourd'hui : les fonctions marquées <span class="soon">prochaine version</span> ailleurs sur le site n'y sont pas encore.</span></td></tr>
+        <tr><td class="mono">Windows 10 / 11</td><td><span class="muted">64 bits uniquement</span></td></tr>
+        <tr><td class="mono">Espace disque</td><td><span class="muted">Davantage que l'installeur une fois décompressé, plus 138,5 Mo pour le modèle de transcription au premier lancement. La traduction locale, si vous l'activez, ajoutera 646 Mo téléchargés à ce moment-là</span></td></tr>
+        <tr><td class="mono">Connexion</td><td><span class="muted">Requise pour les URL et le premier téléchargement de modèle. La consultation de l'historique fonctionne hors ligne</span></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>CE QUI EST EMBARQUÉ</h3>
+      <ul style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--mute)">
+        <li>— Backend FastAPI compilé (PyInstaller), lancé en local sur <code>127.0.0.1</code></li>
+        <li>— FFmpeg et FFprobe, pour l'extraction et la normalisation audio</li>
+        <li>— faster-whisper, pour transcrire sans aucune clé API</li>
+        <li>— yt-dlp, qui sait lire plus de 1 700 sites vidéo et podcast</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── Trois arguments installable ───────────────────────────────────── -->
+<section class="section-tight section-dark">
+  <div class="grid-3">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="mono" style="font-size:9.5px;letter-spacing:.2em;color:var(--acid)">01</div>
+      <h3 style="font-size:17px;font-weight:800;letter-spacing:.04em;color:var(--d-text)">AUCUNE DÉPENDANCE À INSTALLER</h3>
+      <p style="font-size:13px;line-height:1.65;color:var(--d-mute)">Pas de Python à mettre en place, pas de FFmpeg à ajouter au PATH, pas de terminal. L'installeur pose un raccourci et c'est fini.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="mono" style="font-size:9.5px;letter-spacing:.2em;color:var(--acid)">02</div>
+      <h3 style="font-size:17px;font-weight:800;letter-spacing:.04em;color:var(--d-text)">UTILISABLE SANS CLÉ API</h3>
+      <p style="font-size:13px;line-height:1.65;color:var(--d-mute)">Transcription locale via faster-whisper, résumé et chat en mode dégradé local. Ajoutez une clé plus tard pour l'optimisation IA et la traduction.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="mono" style="font-size:9.5px;letter-spacing:.2em;color:var(--acid)">03</div>
+      <h3 style="font-size:17px;font-weight:800;letter-spacing:.04em;color:var(--d-text)">VOS DONNÉES RESTENT LOCALES</h3>
+      <p style="font-size:13px;line-height:1.65;color:var(--d-mute)">Votre historique — textes, sous-titres et audio d'origine — est conservé dans <span class="mono" style="font-size:11.5px">%LOCALAPPDATA%\AI-Video-Transcriber</span>. Aucune télémétrie, aucun compte, et rien n'est supprimé sans votre action.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Obtenir l'installeur ──────────────────────────────────────────── -->
+<section class="section" id="obtenir">
+  <div class="section-head">
+    <h2 class="h-section">OBTENIR L'INSTALLEUR</h2>
+    <p class="right">Deux chemins : récupérer le binaire publié, ou le construire vous-même à partir des sources.</p>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="kicker">Chemin A</div>
+      <h3>TÉLÉCHARGER LE BINAIRE</h3>
+      <p>L'installeur signé est publié dans les releases du dépôt. Téléchargez le <code>.exe</code>, double-cliquez, suivez les trois écrans habituels.</p>
+      <!-- Remplacer par l'URL de la release GitHub qui héberge l'installeur. -->
+      <a class="btn btn-dark" href="https://github.com/wendy7756/AI-Video-Transcriber/releases" style="align-self:flex-start;margin-top:6px">Voir les releases</a>
+      <p class="mono" style="font-size:10.5px;letter-spacing:.08em;color:var(--faint)">SI AUCUNE RELEASE N'EST PUBLIÉE, UTILISEZ LE CHEMIN B.</p>
+    </div>
+    <div class="card">
+      <div class="kicker">Chemin B</div>
+      <h3>CONSTRUIRE L'INSTALLEUR</h3>
+      <p>La chaîne complète — backend PyInstaller, téléchargement de FFmpeg, empaquetage Electron, installeur NSIS — tient en une commande.</p>
+      <div class="code"><span class="c"># prérequis : Node.js 18+, Python 3.10+, PowerShell</span>
+git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+cd AI-Video-Transcriber/desktop
+npm install
+npm run dist:full</div>
+      <p>Le résultat atterrit dans <code>desktop/dist-installer/</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Après installation ────────────────────────────────────────────── -->
+<section class="section" style="padding-top:0">
+  <div class="section-head"><h2 class="h-section">APRÈS L'INSTALLATION</h2></div>
+  <div class="rows">
+    <div class="row">
+      <div class="row-num">01</div>
+      <h3 class="row-name">LANCEZ L'APPLICATION</h3>
+      <p class="row-desc">Le backend démarre en local et la fenêtre s'ouvre dès qu'il répond. Rien à configurer.</p>
+      <div class="row-meta">~5 S</div>
+    </div>
+    <div class="row">
+      <div class="row-num">02</div>
+      <h3 class="row-name">COLLEZ UNE URL OU UN FICHIER</h3>
+      <p class="row-desc">N'importe quel lien en http, ou glissez un fichier audio/vidéo de 200 Mo maximum.</p>
+      <div class="row-meta">IMMÉDIAT</div>
+    </div>
+    <div class="row">
+      <div class="row-num">03</div>
+      <h3 class="row-name">AJOUTEZ UNE CLÉ, SI VOUS VOULEZ</h3>
+      <p class="row-desc">Paramètres → endpoint compatible OpenAI. Sans clé, la transcription locale fonctionne déjà.</p>
+      <div class="row-meta">OPTIONNEL</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Premier lancement ─────────────────────────────────────────────── -->
+<section class="section split wide-left" id="premier-lancement" style="padding-top:0">
+  <figure class="shot win" style="margin:0">
+    <div class="shot-bar">
+      <div class="win-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>
+        AI Video Transcriber
+      </div>
+      <div class="win-btns" aria-hidden="true"><span>—</span><span>▢</span><span>✕</span></div>
+    </div>
+    <img src="assets/img/app-splash.png" width="780" height="600" alt="Écran de démarrage au premier lancement : la marque Transcriber, un égaliseur animé, le message « Premier lancement — téléchargement du modèle de transcription (base). Environ 138 Mo, une seule fois. », un bouton « Continuer sans attendre » et la mention « le téléchargement se poursuit en fond »." loading="lazy">
+    <figcaption class="shot-cap"><span>CAPTURE RÉELLE · TÉLÉCHARGEMENT EN COURS</span><span>FENÊTRE DE 520×400</span></figcaption>
+  </figure>
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div class="kicker">Une seule fois</div>
+    <h2 class="h-section">LE PREMIER<br>LANCEMENT.</h2>
+    <div class="prose">
+      <p>Au tout premier démarrage, l'application télécharge le modèle de transcription : <strong>138 Mo pour le modèle <code>base</code></strong>, une seule fois. C'est le seul téléchargement qu'elle fera jamais d'elle-même.</p>
+      <p>Vous n'avez pas à attendre : le bouton <strong>Continuer sans attendre</strong> ouvre l'application immédiatement et le téléchargement se poursuit en arrière-plan. Ensuite, la transcription locale fonctionne sans clé API et sans connexion.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Alternatives ──────────────────────────────────────────────────── -->
+<section class="section section-alt" id="alternatives">
+  <div class="section-head">
+    <h2 class="h-section">AUTRES ÉDITIONS</h2>
+    <p class="right">Le même logiciel, servi autrement.</p>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3>DOCKER</h3>
+      <p>Pour un poste Linux/macOS ou un serveur partagé avec l'équipe.</p>
+      <div class="code">git clone https://github.com/wendy7756/AI-Video-Transcriber.git
+cd AI-Video-Transcriber
+cp .env.example .env
+docker-compose up -d</div>
+      <p>Interface disponible sur <code>http://localhost:8000</code>.</p>
+    </div>
+    <div class="card">
+      <h3>CODE SOURCE</h3>
+      <p>Pour développer, brancher un modèle local, ou l'appeler depuis vos scripts.</p>
+      <div class="code">pip install -r requirements.txt
+python start.py</div>
+      <p>Python 3.8+ et FFmpeg requis sur la machine. Détails dans la <a href="docs.html#source" style="border-bottom:1px solid var(--rule)">documentation</a>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ installation ──────────────────────────────────────────────── -->
+<section class="section">
+  <div class="section-head"><h2 class="h-section">QUESTIONS D'INSTALLATION</h2></div>
+  <details class="faq">
+    <summary>Windows affiche un avertissement SmartScreen</summary>
+    <div class="a">C'est le comportement normal pour un installeur peu diffusé et non signé par un certificat commercial. Cliquez sur « Informations complémentaires » puis « Exécuter quand même », ou construisez l'installeur vous-même à partir des sources si vous préférez ne rien exécuter d'opaque.</div>
+  </details>
+  <details class="faq">
+    <summary>Faut-il une carte graphique ?</summary>
+    <div class="a">Non. faster-whisper tourne sur le processeur. Une transcription locale est simplement plus lente qu'avec des sous-titres natifs — et sur les plateformes qui en fournissent, aucun audio n'est même téléchargé.</div>
+  </details>
+  <details class="faq">
+    <summary>Où sont stockées les transcriptions ?</summary>
+    <div class="a">Dans <span class="mono">%LOCALAPPDATA%\AI-Video-Transcriber</span>, qui contient <span class="mono">library\</span> (l'historique des transcriptions : un dossier par transcription, avec son texte, ses sous-titres et son audio, plus un index), <span class="mono">models\</span> (les modèles Whisper téléchargés), <span class="mono">temp\</span> (fichiers de travail, jetables) et le journal technique. À la désinstallation, l'assistant demande s'il faut supprimer ce dossier et le conserve par défaut — y compris en installation silencieuse. Une mise à jour ne pose pas la question et ne touche à rien.</div>
+  </details>
+  <details class="faq">
+    <summary>Une version macOS ou Linux ?</summary>
+    <div class="a">L'installeur packagé cible Windows. Sur macOS et Linux, utilisez l'édition Docker ou l'installation depuis les sources : c'est le même logiciel et la même interface.</div>
+  </details>
+  <details class="faq">
+    <summary>Est-ce que ça marche hors-ligne ?</summary>
+    <div class="a">Pour un fichier local et une transcription Whisper, oui — une fois le modèle téléchargé. Les URL de plateformes et les appels au modèle de langue nécessitent évidemment une connexion.</div>
+  </details>
+</section>
+
+<section style="background:var(--paper);padding:20px var(--pad) 0">
+  <div style="background:var(--ink);padding:64px 44px;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center">
+    <p style="font-size:clamp(40px,8vw,84px);line-height:.9;font-weight:800;letter-spacing:-.045em;color:var(--d-text)">INSTALLEZ.<br>LISEZ.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
+      <a class="btn btn-acid" href="#obtenir">Obtenir l'installeur</a>
+      <a class="btn btn-outline-d" href="docs.html">Lire la documentation</a>
+    </div>
+    <div class="mono" style="font-size:10px;letter-spacing:.16em;color:var(--d-faint)">GRATUIT · SANS COMPTE · APACHE 2.0</div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="mark">TRANSCRIBER</div>
+      <p>Transcrire, résumer, archiver. Sur votre machine ou sur votre serveur.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <div class="h">Produit</div>
+        <a href="fonctionnalites.html">Fonctionnalités</a>
+        <a href="telecharger.html">Télécharger</a>
+        <a href="plateformes.html">Plateformes</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Développeurs</div>
+        <a href="docs.html">Documentation</a>
+        <a href="docs.html#api">API</a>
+        <a href="docs.html#docker">Auto-hébergement</a>
+        <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Légal</div>
+        <a href="confidentialite.html">Confidentialité</a>
+        <a href="confidentialite.html#donnees">Données</a>
+        <a href="https://www.apache.org/licenses/LICENSE-2.0">Licence Apache 2.0</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 TRANSCRIBER</div>
+    <div>V1.1.0 · LOGICIEL LIBRE</div>
+  </div>
+</footer>
+
+</body>
+</html>

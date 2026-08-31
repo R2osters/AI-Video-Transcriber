@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plateformes, formats et langues — Transcriber</title>
+<meta name="description" content="Plus de 1 700 sites vidéo et podcast via yt-dlp — la seule condition est un lien en http. Formats audio et vidéo acceptés, 11 langues de résumé, temps de traitement réels.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Aller au contenu</a>
+
+<div class="utility">
+  <div>LOGICIEL INSTALLABLE — WINDOWS · DOCKER · CODE SOURCE — GRATUIT</div>
+  <div class="utility-links">
+    <a href="telecharger.html">TÉLÉCHARGER</a>
+    <a href="docs.html">DOCS</a>
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GITHUB</a>
+  </div>
+</div>
+
+<nav class="nav">
+  <div class="nav-left">
+    <a href="fonctionnalites.html">Produit</a>
+    <a href="index.html#pipeline">Pipeline</a>
+    <a href="plateformes.html" aria-current="page">Plateformes</a>
+    <a href="docs.html">Docs</a>
+  </div>
+  <div class="nav-mark"><a href="index.html">TRANSCRIBER</a></div>
+  <div class="nav-right">
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+    <a class="nav-cta" href="telecharger.html">Télécharger</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<header class="page-head">
+  <div>
+    <div class="eyebrow" style="margin-bottom:18px">Compatibilité</div>
+    <h1>CE QU'IL<br>SAIT LIRE.</h1>
+  </div>
+  <p class="sub">Il n'existe pas de liste de sites autorisés dans le logiciel. La seule condition est que le lien commence par <code>http</code> : les URL passent ensuite par yt-dlp, qui embarque plus de 1 700 extracteurs. Les fichiers, eux, passent par FFmpeg, qui accepte à peu près tout ce qui contient du son.</p>
+</header>
+
+<!-- ── Plateformes reconnues ─────────────────────────────────────────── -->
+<section class="section">
+  <div class="section-head">
+    <h2 class="h-section">PLATEFORMES</h2>
+    <p class="right">Aucune de ces lignes n'est une condition. Ce sont les sources que le logiciel <em>reconnaît</em> pour les étiqueter proprement dans l'historique — les autres marchent exactement pareil, sous une étiquette générique.</p>
+  </div>
+  <div class="rows">
+    <div class="row">
+      <div class="row-num">01</div>
+      <h3 class="row-name">YOUTUBE</h3>
+      <p class="row-desc">Sous-titres automatiques ou manuels détectés — le chemin le plus rapide du pipeline.</p>
+      <div class="row-meta">SOUS-TITRES NATIFS</div>
+    </div>
+    <div class="row">
+      <div class="row-num">02</div>
+      <h3 class="row-name">APPLE PODCASTS</h3>
+      <p class="row-desc">Audio seul : Whisper prend la main, la transcription est produite localement.</p>
+      <div class="row-meta">WHISPER</div>
+    </div>
+    <div class="row">
+      <div class="row-num">03</div>
+      <h3 class="row-name">SOUNDCLOUD</h3>
+      <p class="row-desc">Même chemin que les podcasts : extraction audio puis transcription.</p>
+      <div class="row-meta">WHISPER</div>
+    </div>
+    <div class="row">
+      <div class="row-num">04</div>
+      <h3 class="row-name">BILIBILI</h3>
+      <p class="row-desc">Sous-titres quand la vidéo en propose, sinon repli automatique.</p>
+      <div class="row-meta">MIXTE</div>
+    </div>
+    <div class="row">
+      <div class="row-num">05</div>
+      <h3 class="row-name">TIKTOK · INSTAGRAM · FACEBOOK</h3>
+      <p class="row-desc">Formats courts. La transcription locale suffit largement sur ces durées.</p>
+      <div class="row-meta">MIXTE</div>
+    </div>
+    <div class="row">
+      <div class="row-num">06</div>
+      <h3 class="row-name">VIMEO · TWITCH · X</h3>
+      <p class="row-desc">Vidéos longues et rediffusions, y compris quand aucun sous-titre n'existe.</p>
+      <div class="row-meta">MIXTE</div>
+    </div>
+  </div>
+  <p class="lede" style="margin-top:32px;max-width:760px">Au-delà de ces exemples : Instagram, X, Facebook, Twitch, Reddit, Dailymotion, Rumble, Odysee, Youku, iQiyi, Tencent Video… <strong>1 751 extracteurs dans la version que nous avons testée</strong>, et le chiffre monte à chaque mise à jour de yt-dlp. Le logiciel ne vérifie pas d'où vient le lien : s'il commence par <code>http</code>, il essaie.</p>
+</section>
+
+<!-- ── Formats ───────────────────────────────────────────────────────── -->
+<section class="section section-alt" id="formats">
+  <div class="section-head">
+    <h2 class="h-section">FORMATS DE FICHIER</h2>
+    <p class="right">200 Mo maximum par fichier, plusieurs fichiers à la fois.</p>
+  </div>
+  <div class="grid-3">
+    <div class="card">
+      <h3>VIDÉO</h3>
+      <div class="tag-list">
+        <span class="tag">mp4</span><span class="tag">webm</span><span class="tag">mkv</span>
+        <span class="tag">mov</span><span class="tag">avi</span>
+      </div>
+      <p>La piste audio est extraite et normalisée par FFmpeg avant transcription.</p>
+    </div>
+    <div class="card">
+      <h3>AUDIO</h3>
+      <div class="tag-list">
+        <span class="tag">mp3</span><span class="tag">m4a</span><span class="tag">wav</span>
+        <span class="tag">ogg</span><span class="tag">flac</span><span class="tag">aac</span>
+        <span class="tag">opus</span><span class="tag">wma</span><span class="tag">aiff</span>
+      </div>
+      <p>Chemin direct vers Whisper : pas de vidéo à télécharger ni à décoder.</p>
+    </div>
+    <div class="card">
+      <h3>TEXTE</h3>
+      <div class="tag-list"><span class="tag">txt</span></div>
+      <p>Traité comme une transcription déjà réalisée : le pipeline saute directement à l'optimisation, la traduction et le résumé.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Langues ───────────────────────────────────────────────────────── -->
+<section class="section" id="langues">
+  <div class="section-head">
+    <h2 class="h-section">LANGUES DU RÉSUMÉ</h2>
+    <p class="right">La langue de la source est détectée automatiquement. Vous choisissez seulement la langue de sortie.</p>
+  </div>
+  <div class="tag-list" style="gap:10px">
+    <span class="tag">Français</span><span class="tag">English</span><span class="tag">中文</span>
+    <span class="tag">Español</span><span class="tag">Deutsch</span><span class="tag">Italiano</span>
+    <span class="tag">Português</span><span class="tag">Русский</span><span class="tag">日本語</span>
+    <span class="tag">한국어</span><span class="tag">العربية</span>
+  </div>
+  <p class="lede" style="margin-top:26px;max-width:720px">Si la langue demandée diffère de celle de la source, une étape de traduction s'ajoute au pipeline — et seulement dans ce cas.</p>
+</section>
+
+<!-- ── Temps de traitement ───────────────────────────────────────────── -->
+<section class="section section-dark" id="temps">
+  <div class="section-head">
+    <div>
+      <div class="kicker" style="margin-bottom:12px;color:var(--acid)">Ordres de grandeur</div>
+      <h2 class="h-section">COMBIEN DE TEMPS.</h2>
+    </div>
+    <p class="right" style="color:var(--d-mute)">Mesures indicatives, option « conserver la vidéo originale » désactivée. Le mode Whisper dépend fortement du processeur et du modèle choisi.</p>
+  </div>
+  <div class="table-wrap">
+    <table class="t" style="color:var(--d-text)">
+      <tr><th style="color:var(--d-faint)">Durée de la source</th><th style="color:var(--d-faint)">Sous-titres natifs</th><th style="color:var(--d-faint)">Whisper local</th><th style="color:var(--d-faint)">Remarque</th></tr>
+      <tr style="border-color:var(--d-line-2)"><td class="mono">1 minute</td><td class="mono" style="color:var(--acid)">~5 s</td><td class="mono">30 s – 1 min</td><td style="color:var(--d-mute)">Aucun audio téléchargé en mode sous-titres</td></tr>
+      <tr><td class="mono">5 minutes</td><td class="mono" style="color:var(--acid)">~10 s</td><td class="mono">2 – 5 min</td><td style="color:var(--d-mute)">Les sous-titres auto de YouTube suffisent</td></tr>
+      <tr><td class="mono">15 minutes</td><td class="mono" style="color:var(--acid)">~15 s</td><td class="mono">5 – 15 min</td><td style="color:var(--d-mute)">La plupart des vidéos YouTube</td></tr>
+      <tr><td class="mono">30 minutes et plus</td><td class="mono" style="color:var(--acid)">~20 s</td><td class="mono">15 – 60 min</td><td style="color:var(--d-mute)">Les podcasts passent toujours par Whisper</td></tr>
+    </table>
+  </div>
+</section>
+
+<section style="background:var(--paper);padding:20px var(--pad) 0">
+  <div style="background:var(--ink);padding:64px 44px;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center">
+    <p style="font-size:clamp(38px,7vw,76px);line-height:.92;font-weight:800;letter-spacing:-.045em;color:var(--d-text)">COLLEZ UNE URL.<br>VOYEZ.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
+      <a class="btn btn-acid" href="telecharger.html">Installer le logiciel</a>
+      <a class="btn btn-outline-d" href="fonctionnalites.html">Voir l'application</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="mark">TRANSCRIBER</div>
+      <p>Transcrire, résumer, archiver. Sur votre machine ou sur votre serveur.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <div class="h">Produit</div>
+        <a href="fonctionnalites.html">Fonctionnalités</a>
+        <a href="telecharger.html">Télécharger</a>
+        <a href="plateformes.html">Plateformes</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Développeurs</div>
+        <a href="docs.html">Documentation</a>
+        <a href="docs.html#api">API</a>
+        <a href="docs.html#docker">Auto-hébergement</a>
+        <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Légal</div>
+        <a href="confidentialite.html">Confidentialité</a>
+        <a href="confidentialite.html#donnees">Données</a>
+        <a href="https://www.apache.org/licenses/LICENSE-2.0">Licence Apache 2.0</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 TRANSCRIBER</div>
+    <div>V1.1.0 · LOGICIEL LIBRE</div>
+  </div>
+</footer>
+
+</body>
+</html>

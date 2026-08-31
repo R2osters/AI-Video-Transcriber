@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog — Transcriber</title>
+<meta name="description" content="Historique des versions de Transcriber : historique conservé sur disque, version bureau installable, refonte de l'interface, micro live, diarisation, exports SRT/VTT et intégrations agents.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Aller au contenu</a>
+
+<div class="utility">
+  <div>LOGICIEL INSTALLABLE — WINDOWS · DOCKER · CODE SOURCE — GRATUIT</div>
+  <div class="utility-links">
+    <a href="telecharger.html">TÉLÉCHARGER</a>
+    <a href="docs.html">DOCS</a>
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GITHUB</a>
+  </div>
+</div>
+
+<nav class="nav">
+  <div class="nav-left">
+    <a href="fonctionnalites.html">Produit</a>
+    <a href="index.html#pipeline">Pipeline</a>
+    <a href="plateformes.html">Plateformes</a>
+    <a href="docs.html">Docs</a>
+  </div>
+  <div class="nav-mark"><a href="index.html">TRANSCRIBER</a></div>
+  <div class="nav-right">
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+    <a class="nav-cta" href="telecharger.html">Télécharger</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<header class="page-head">
+  <div>
+    <div class="eyebrow" style="margin-bottom:18px">Journal des versions</div>
+    <h1>CE QUI A<br>CHANGÉ.</h1>
+  </div>
+  <p class="sub">Les entrées ci-dessous reprennent l'historique réel du dépôt. Celles marquées « prochaine version » sont dans le code mais pas encore dans l'installeur téléchargeable.</p>
+</header>
+
+<section class="section">
+  <div class="rows">
+
+    <div class="row is-dark">
+      <div class="row-num">1.2</div>
+      <div class="row-body">
+        <h2 class="row-name">SANS CLÉ, POUR DE BON <span class="soon">prochaine version</span></h2>
+        <ul style="display:flex;flex-direction:column;gap:7px;margin-top:12px;font-size:13.5px;line-height:1.6;color:var(--d-mute)">
+          <li>— <strong>Traduction sans clé API</strong> : un modèle local s'installe à la demande depuis les Paramètres (646 Mo, une seule fois), onze langues de destination. Correct pour comprendre et citer ; un bon modèle derrière une clé reste meilleur sur les textes techniques</li>
+          <li>— Résumé extractif nettement plus pertinent : il choisit désormais les phrases les mieux reliées à l'ensemble du texte, au lieu de celles qui contiennent les mots les plus fréquents. Il sélectionne toujours des phrases du transcript, il n'en rédige aucune</li>
+          <li>— Recherche dans la transcription plus juste : les mots rares comptent davantage que les mots courants, et un long passage ne gagne plus simplement parce qu'il est long. Toujours des extraits cités, jamais une réponse rédigée</li>
+          <li>— Emplacement de l'historique configurable, pour le sortir du disque système. Le déplacement copie, vérifie, et ne supprime l'ancien emplacement qu'ensuite</li>
+          <li>— Contenus réservés : possibilité de désigner un navigateur dont la session est réutilisée. Cookies lus localement, jamais recopiés</li>
+          <li>— Échecs de téléchargement expliqués en français, avec l'action à faire</li>
+          <li>— Le module qui récupère les vidéos se met à jour sans réinstaller l'application</li>
+        </ul>
+      </div>
+      <div class="row-meta">31 AOÛT 2026</div>
+    </div>
+
+    <div class="row">
+      <div class="row-num">1.1</div>
+      <div class="row-body">
+        <h2 class="row-name">HISTORIQUE CONSERVÉ SUR DISQUE</h2>
+        <ul style="display:flex;flex-direction:column;gap:7px;margin-top:12px;font-size:13.5px;line-height:1.6;color:var(--mute)">
+          <li>— L'historique quitte le stockage du navigateur pour le disque : un dossier par transcription, un index, et l'audio d'origine conservé. L'ancienne version se vidait d'elle-même une fois le quota du navigateur atteint</li>
+          <li>— Renommage, favoris, suppression entrée par entrée, pagination au-delà de 50 entrées</li>
+          <li>— Panneau « Espace disque » dans les paramètres, avec bouton « Libérer de l'espace » qui ne retire que l'audio et garde les textes</li>
+          <li>— Rien n'est supprimé automatiquement : ni purge par ancienneté, ni quota</li>
+          <li>— Consultation entièrement hors ligne, audio compris</li>
+          <li>— <strong>Correctif de sécurité</strong> : l'API locale était accessible sans jeton, une page web tierce ouverte dans le navigateur pouvait lire les transcriptions. L'application exige désormais un jeton de session généré à chaque lancement, refuse les origines tierces et les noms d'hôte non-bouclés. Aucune version distribuée n'a jamais réuni l'historique sur disque et ce défaut</li>
+          <li>— Écran de démarrage au premier lancement : téléchargement du modèle de transcription (138,5 Mo, une seule fois) avec un bouton « Continuer sans attendre »</li>
+          <li>— Le désinstalleur demande s'il faut supprimer vos données, et les conserve par défaut</li>
+        </ul>
+      </div>
+      <div class="row-meta">30 AOÛT 2026</div>
+    </div>
+
+    <div class="row">
+      <div class="row-num">1.0</div>
+      <div class="row-body">
+        <h2 class="row-name">VERSION BUREAU INSTALLABLE</h2>
+        <ul style="display:flex;flex-direction:column;gap:7px;margin-top:12px;font-size:13.5px;line-height:1.6;color:var(--mute)">
+          <li>— Installeur Windows NSIS : Electron en façade, backend FastAPI compilé avec PyInstaller</li>
+          <li>— FFmpeg, FFprobe et faster-whisper embarqués dans le paquet</li>
+          <li>— Données isolées dans le dossier applicatif de l'utilisateur</li>
+          <li>— Icône dédiée pour l'exécutable, l'installeur et la fenêtre</li>
+          <li>— Mode sans clé fiabilisé : chargement de Whisper sorti de la boucle asyncio</li>
+        </ul>
+      </div>
+      <div class="row-meta">29 AOÛT 2026</div>
+    </div>
+
+    <div class="row">
+      <div class="row-num">—</div>
+      <div class="row-body">
+        <h2 class="row-name">REFONTE DE L'INTERFACE</h2>
+        <ul style="display:flex;flex-direction:column;gap:7px;margin-top:12px;font-size:13.5px;line-height:1.6;color:var(--mute)">
+          <li>— Nouvelle interface « Transcriber » : barre latérale, vues progression, résultats, historique, paramètres</li>
+          <li>— Transcription micro en direct, en local ou via l'API Realtime</li>
+          <li>— Sélecteur de modèle Whisper et de langue audio</li>
+          <li>— Fonctions clés utilisables sans aucune clé API</li>
+        </ul>
+      </div>
+      <div class="row-meta">28–29 AOÛT 2026</div>
+    </div>
+
+    <div class="row">
+      <div class="row-num">—</div>
+      <div class="row-body">
+        <h2 class="row-name">HISTORIQUE, CHAT ET EXPORTS</h2>
+        <ul style="display:flex;flex-direction:column;gap:7px;margin-top:12px;font-size:13.5px;line-height:1.6;color:var(--mute)">
+          <li>— Export de sous-titres SRT et VTT depuis les segments Whisper</li>
+          <li>— File d'attente multi-fichiers avec traitement séquentiel</li>
+          <li>— Enregistrement micro directement dans la file</li>
+          <li>— Panneau d'historique avec rechargement et suppression</li>
+          <li>— Chat sur transcription : questions-réponses sur les tâches terminées</li>
+          <li>— Identification optionnelle des locuteurs via pyannote</li>
+          <li>— Formats d'import étendus : aac, opus, wma, aiff, mov, avi</li>
+        </ul>
+      </div>
+      <div class="row-meta">28 AOÛT 2026</div>
+    </div>
+
+    <div class="row">
+      <div class="row-num">—</div>
+      <div class="row-body">
+        <h2 class="row-name">AGENTS ET VIDÉO ORIGINALE</h2>
+        <ul style="display:flex;flex-direction:column;gap:7px;margin-top:12px;font-size:13.5px;line-height:1.6;color:var(--mute)">
+          <li>— Serveur MCP et compétence dédiée pour Claude et Codex</li>
+          <li>— Téléchargement de la vidéo originale, en parallèle de la transcription</li>
+          <li>— Travail de stabilité sur le pipeline</li>
+        </ul>
+      </div>
+      <div class="row-meta">18–24 AOÛT 2026</div>
+    </div>
+
+    <div class="row">
+      <div class="row-num">—</div>
+      <div class="row-body">
+        <h2 class="row-name">IMPORT DE FICHIERS LOCAUX</h2>
+        <ul style="display:flex;flex-direction:column;gap:7px;margin-top:12px;font-size:13.5px;line-height:1.6;color:var(--mute)">
+          <li>— Prise en charge des fichiers audio, vidéo et texte déposés depuis la machine</li>
+          <li>— Normalisation FFmpeg avant transcription</li>
+        </ul>
+      </div>
+      <div class="row-meta">30 AVRIL 2026</div>
+    </div>
+
+  </div>
+
+  <p class="lede" style="margin-top:38px">
+    Historique complet et détail des commits :
+    <a href="https://github.com/wendy7756/AI-Video-Transcriber/commits" style="border-bottom:1px solid var(--rule)">sur GitHub</a>.
+  </p>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <div class="mark">TRANSCRIBER</div>
+      <p>Transcrire, résumer, archiver. Sur votre machine ou sur votre serveur.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <div class="h">Produit</div>
+        <a href="fonctionnalites.html">Fonctionnalités</a>
+        <a href="telecharger.html">Télécharger</a>
+        <a href="plateformes.html">Plateformes</a>
+        <a href="changelog.html">Changelog</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Développeurs</div>
+        <a href="docs.html">Documentation</a>
+        <a href="docs.html#api">API</a>
+        <a href="docs.html#docker">Auto-hébergement</a>
+        <a href="https://github.com/wendy7756/AI-Video-Transcriber">GitHub</a>
+      </div>
+      <div class="footer-col">
+        <div class="h">Légal</div>
+        <a href="confidentialite.html">Confidentialité</a>
+        <a href="confidentialite.html#donnees">Données</a>
+        <a href="https://www.apache.org/licenses/LICENSE-2.0">Licence Apache 2.0</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <div>© 2026 TRANSCRIBER</div>
+    <div>V1.1.0 · LOGICIEL LIBRE</div>
+  </div>
+</footer>
+
+</body>
+</html>
