@@ -83,7 +83,8 @@ class App {
     $('sidebar').classList.remove('open');
     if (name === 'history') this._renderHistory();
     if (name === 'settings') {
-      this._refreshDisk(); this._refreshEngine(); this._refreshLocation(); this._refreshAuth();
+      this._refreshDisk(); this._refreshEngine(); this._refreshLocation();
+      this._refreshAuth(); this._refreshYtdlp();
     }
   }
 
@@ -161,6 +162,9 @@ class App {
     $('relocateBtn').addEventListener('click', () => this._relocate());
     $('resetLocationBtn').addEventListener('click', () => this._relocate(''));
     $('cookieBrowser').addEventListener('change', () => this._saveAuth());
+    $('ytdlpCheckBtn').addEventListener('click', () => this._refreshYtdlp({ check: true }));
+    $('ytdlpUpdateBtn').addEventListener('click', () => this._updateYtdlp());
+    $('ytdlpRevertBtn').addEventListener('click', () => this._revertYtdlp());
     $('openLibraryBtn').addEventListener('click', () => {
       if (window.avt && window.avt.openLibrary) window.avt.openLibrary();
     });
@@ -1500,6 +1504,65 @@ class App {
       this._renderDiskPanel();
       this._toast(`${this._fmtSize(res.freed)} libérés`);
     } catch (_) { this._toast('Libération impossible'); }
+  }
+
+  /* ── Module de téléchargement (yt-dlp) ────────────────── */
+  async _refreshYtdlp({ check = false } = {}) {
+    let s;
+    try { s = await (await fetch(`${API}/updater/ytdlp?check=${check ? 'true' : 'false'}`)).json(); }
+    catch (_) { return; }
+    this._ytdlp = s;
+
+    const dot = $('ytdlpStatus').querySelector('.dot');
+    const txt = $('ytdlpStatus').querySelector('.txt');
+    const note = $('ytdlpNote');
+    txt.textContent = s.installed ? `version ${s.installed}` : 'version inconnue';
+    dot.style.background = s.override_active ? 'var(--accent)' : 'var(--line)';
+    $('ytdlpRevertBtn').style.display = s.override_active ? '' : 'none';
+
+    if (s.updating) {
+      const st = (s.progress && s.progress.state) || 'downloading';
+      const labels = { checking: 'vérification', downloading: 'téléchargement', installing: 'installation' };
+      note.textContent = `Mise à jour en cours — ${labels[st] || st}…`;
+      $('ytdlpUpdateBtn').disabled = true;
+      clearTimeout(this._ytdlpTimer);
+      this._ytdlpTimer = setTimeout(() => this._refreshYtdlp(), 1200);
+      return;
+    }
+
+    $('ytdlpUpdateBtn').disabled = false;
+    const r = s.last_result || {};
+    if (r.error) {
+      note.textContent = `Mise à jour échouée : ${r.error}. La version d'origine reste en place.`;
+    } else if (r.restart_required) {
+      note.textContent = `Version ${r.version} installée — redémarrez l'application pour l'utiliser.`;
+    } else if (s.check_error) {
+      note.textContent = `Vérification impossible : ${s.check_error}`;
+    } else if (s.latest && s.latest !== s.installed) {
+      note.textContent = `Version ${s.latest} disponible.`;
+    } else if (s.latest) {
+      note.textContent = 'Vous avez la dernière version.';
+    } else {
+      note.textContent = s.override_active
+        ? "Version mise à jour, différente de celle livrée avec l'application."
+        : "Version livrée avec l'application.";
+    }
+  }
+
+  async _updateYtdlp() {
+    try {
+      await fetch(`${API}/updater/ytdlp`, { method: 'POST' });
+      this._refreshYtdlp();
+    } catch (_) { this._toast('Mise à jour impossible'); }
+  }
+
+  async _revertYtdlp() {
+    if (!confirm("Revenir au module livré avec l'application ?\n\nLa mise à jour téléchargée sera supprimée.")) return;
+    try {
+      await fetch(`${API}/updater/ytdlp`, { method: 'DELETE' });
+      this._toast("Version d'origine rétablie — redémarrez l'application");
+      this._refreshYtdlp();
+    } catch (_) { this._toast('Opération impossible'); }
   }
 
   /* ── Connexion aux plateformes ────────────────────────── */

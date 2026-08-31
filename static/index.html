@@ -468,7 +468,7 @@
     }
     .hist-more-row:hover { border-style: solid; color: var(--ink); }
 
-    .set-card.disk, .set-card.engine, .set-card.auth { width: 100%; }
+    .set-card.disk, .set-card.engine, .set-card.auth, .set-card.updater { width: 100%; }
     .engine-bar {
       height: 6px; border-radius: 3px; background: var(--sand-deep);
       overflow: hidden; display: none;
@@ -1085,6 +1085,27 @@
         <div class="set-actions">
           <button class="btn-secondary" id="freeSpaceBtn">Libérer de l'espace</button>
           <button class="btn-secondary" id="resetLocationBtn">Emplacement par défaut</button>
+        </div>
+      </div>
+
+      <div class="set-card updater card">
+        <div class="set-card-head">
+          <div class="set-card-title">Module de téléchargement</div>
+          <div class="conn-status" id="ytdlpStatus">
+            <span class="dot"></span><span class="txt">—</span>
+          </div>
+        </div>
+        <div class="set-hint">
+          C'est lui qui sait dialoguer avec YouTube, TikTok, Instagram et les autres.
+          Ces sites changent souvent : quand une vidéo devient impossible à récupérer
+          alors que son lien s'ouvre dans un navigateur, c'est presque toujours ce module
+          qui a besoin d'être mis à jour. Il se met à jour seul, sans réinstaller l'application.
+        </div>
+        <div class="engine-note mono" id="ytdlpNote"></div>
+        <div class="set-actions">
+          <button class="btn-secondary" id="ytdlpCheckBtn">Vérifier</button>
+          <button class="btn-primary" id="ytdlpUpdateBtn">Mettre à jour</button>
+          <button class="btn-secondary" id="ytdlpRevertBtn" style="display:none">Revenir à la version d'origine</button>
         </div>
       </div>
 

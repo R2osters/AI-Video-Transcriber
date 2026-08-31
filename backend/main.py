@@ -16,6 +16,16 @@ import secrets
 import shutil
 import openai
 
+# yt-dlp 的更新必须在导入之前生效，否则冻结在安装包里的那份已经被载入。
+# 这段刻意放在 video_processor 之前，别挪到下面去。
+_EARLY_DATA_ROOT = Path(os.getenv("AVT_DATA_DIR", str(Path(__file__).parent.parent)))
+try:
+    from ytdlp_updater import activate as _activate_ytdlp
+
+    _activate_ytdlp(_EARLY_DATA_ROOT)
+except Exception as _e:  # 更新目录损坏也不能让应用起不来
+    logging.getLogger(__name__).warning(f"启用更新版 yt-dlp 失败，使用随应用分发的版本: {_e}")
+
 from video_processor import VideoProcessor
 from transcriber import Transcriber
 from summarizer import Summarizer
@@ -1491,6 +1501,64 @@ def _relocate_library(target: Path) -> None:
         except Exception:
             pass
         _relocation.update({"state": "error", "error": str(e)})
+
+
+_ytdlp_thread: Optional[threading.Thread] = None
+_ytdlp_result: dict = {}
+
+
+@app.get("/api/updater/ytdlp")
+async def ytdlp_status(check: bool = False):
+    """当前 yt-dlp 版本、是否用了更新版，以及可选的最新版查询。
+
+    check=false 时不联网：状态面板不应该每次打开都去戳 PyPI。
+    """
+    import ytdlp_updater as up
+
+    data = {
+        "installed": up.installed_version(),
+        "override_active": up.is_override_active(_EARLY_DATA_ROOT),
+        "updating": bool(_ytdlp_thread and _ytdlp_thread.is_alive()),
+        "progress": up.status(),
+        "last_result": _ytdlp_result,
+    }
+    if check:
+        try:
+            data["latest"] = up.latest_version()["version"]
+        except Exception as e:
+            data["check_error"] = str(e)
+    return data
+
+
+@app.post("/api/updater/ytdlp")
+async def ytdlp_update():
+    """下载并启用最新版 yt-dlp（重启后生效）。"""
+    global _ytdlp_thread
+    import ytdlp_updater as up
+
+    if _ytdlp_thread and _ytdlp_thread.is_alive():
+        return {"started": False, "reason": "already_running"}
+
+    def _run():
+        global _ytdlp_result
+        try:
+            _ytdlp_result = up.install(_EARLY_DATA_ROOT)
+        except Exception as e:
+            logger.error(f"更新 yt-dlp 失败: {e}")
+            _ytdlp_result = {"updated": False, "error": str(e)}
+
+    _ytdlp_thread = threading.Thread(target=_run, name="ytdlp-update", daemon=True)
+    _ytdlp_thread.start()
+    return {"started": True}
+
+
+@app.delete("/api/updater/ytdlp")
+async def ytdlp_revert():
+    """回到随应用分发的版本。"""
+    import ytdlp_updater as up
+
+    reverted = up.revert(_EARLY_DATA_ROOT)
+    return {"reverted": reverted, "restart_required": reverted}
 
 
 @app.get("/api/platforms/auth")
