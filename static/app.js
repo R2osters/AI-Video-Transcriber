@@ -1542,6 +1542,13 @@ class App {
       note.textContent = `Version ${s.latest} disponible.`;
     } else if (s.latest) {
       note.textContent = 'Vous avez la dernière version.';
+    } else if (s.override === 'ignored_older') {
+      // Piège évité : croire qu'on tourne sur une mise à jour plus ancienne que l'application
+      note.textContent = `Mise à jour ${s.override_version} ignorée : la version livrée `
+        + `avec l'application (${s.bundled_version}) est plus récente. Vous pouvez la supprimer.`;
+      $('ytdlpRevertBtn').style.display = '';
+    } else if (s.override === 'too_late') {
+      note.textContent = "La mise à jour n'a pas pu être activée au démarrage. Redémarrez l'application.";
     } else {
       note.textContent = s.override_active
         ? "Version mise à jour, différente de celle livrée avec l'application."
