@@ -14,6 +14,29 @@ logger = logging.getLogger(__name__)
 class VideoProcessor:
     """视频处理器，使用yt-dlp下载和转换视频"""
     
+    # yt-dlp 支持的浏览器；只接受白名单内的值，避免把任意字符串传进去
+    SUPPORTED_BROWSERS = ("chrome", "edge", "firefox", "brave", "chromium", "opera", "vivaldi", "safari")
+
+    @classmethod
+    def cookie_browser(cls) -> str:
+        """配置的浏览器名；未配置或不认识则返回空串。
+
+        Instagram、Facebook、X 以及各平台的私享内容都要求登录。与其让用户导出
+        cookies 文件，不如直接复用他本机浏览器里已有的会话。
+        """
+        name = (os.getenv("AVT_COOKIES_BROWSER") or "").strip().lower()
+        return name if name in cls.SUPPORTED_BROWSERS else ""
+
+    @classmethod
+    def with_auth(cls, opts: dict) -> dict:
+        """给任意一份 yt-dlp 选项补上浏览器 cookies。"""
+        browser = cls.cookie_browser()
+        if not browser:
+            return opts
+        merged = dict(opts)
+        merged["cookiesfrombrowser"] = (browser,)
+        return merged
+
     def __init__(self):
         self.ydl_opts = {
             'format': 'bestaudio/best',  # 优先下载最佳音频源
@@ -97,7 +120,7 @@ class VideoProcessor:
             }
 
             logger.info(f"开始下载原视频（≤{max_height}p）: {url}")
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(self.with_auth(ydl_opts)) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, True)
 
             video_title = (info or {}).get('title') or 'unknown'
@@ -134,7 +157,7 @@ class VideoProcessor:
         try:
             # 1. 快速探测：获取视频信息和字幕可用性，不下载任何内容
             check_opts = {"quiet": True, "no_warnings": True, "noplaylist": True}
-            with yt_dlp.YoutubeDL(check_opts) as ydl:
+            with yt_dlp.YoutubeDL(self.with_auth(check_opts)) as ydl:
                 info = await asyncio.to_thread(ydl.extract_info, url, False)
 
             video_title = info.get("title", "unknown")
@@ -177,7 +200,7 @@ class VideoProcessor:
                 "no_warnings": True,
                 "noplaylist": True,
             }
-            with yt_dlp.YoutubeDL(dl_opts) as ydl:
+            with yt_dlp.YoutubeDL(self.with_auth(dl_opts)) as ydl:
                 await asyncio.to_thread(ydl.download, [url])
 
             # 3. 查找下载的字幕文件
@@ -410,7 +433,7 @@ class VideoProcessor:
             logger.info(f"开始下载视频: {url}")
             
             import asyncio
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            with yt_dlp.YoutubeDL(self.with_auth(ydl_opts)) as ydl:
                 if prefetched_title:
                     # 标题和时长已在 fetch_subtitles 中获取，直接下载，跳过重复探测
                     video_title = prefetched_title
@@ -483,7 +506,7 @@ class VideoProcessor:
             视频信息字典
         """
         try:
-            with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+            with yt_dlp.YoutubeDL(self.with_auth({'quiet': True})) as ydl:
                 info = ydl.extract_info(url, download=False)
                 return {
                     'title': info.get('title', ''),

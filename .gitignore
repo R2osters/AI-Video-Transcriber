@@ -70,3 +70,22 @@ models/
 .claude/
 .claude-flow/
 dict
+
+# Desktop (Electron/PyInstaller) — artefacts de build
+desktop/node_modules/
+desktop/.venv/
+desktop/dist-backend/
+desktop/dist-installer/
+desktop/resources/bin/
+desktop/*.spec.bak
+# desktop/build contient l'icône (exception au build/ global)
+!desktop/build/
+!desktop/build/**
+
+# Installeurs générés (jamais versionnés — passer par une release taguée)
+*.exe
+releases/
+
+# PyInstaller écrit son dossier de travail dans desktop/ (workpath)
+desktop/build/backend/
+desktop/build-pyinstaller/

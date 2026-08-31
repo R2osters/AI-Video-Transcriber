@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>AI Video Transcriber</title>
+    <style>
+      /* Tokens repris tels quels de static/index.html : le splash et
+         l'application doivent être indiscernables au moment de la bascule. */
+      :root {
+        --cream:      #F5F3EF;
+        --surface:    #FCFBF9;
+        --sand:       #ECE9E2;
+        --ink:        #1F1C18;
+        --ink-body:   #3A362F;
+        --warm-gray:  #5C574F;
+        --muted:      #8C867C;
+        --faint:      #B0AA9F;
+        --line-soft:  #DCD7CE;
+        --night:      #191713;
+        --accent:     #0FF302;
+        /* Pas de webfont ici : le splash doit s'afficher instantanément,
+           y compris hors ligne. Les familles restent celles de l'app,
+           avec un repli système si elles ne sont pas installées. */
+        --sans: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        padding: 32px;
+        background: var(--cream);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 13.5px;
+        line-height: 1.6;
+        user-select: none;
+        -webkit-app-region: drag;
+      }
+
+      /* ── Marque : le même bloc que la barre latérale de l'app ── */
+      .brand { display: flex; align-items: center; gap: 11px; }
+      .mark {
+        width: 34px; height: 34px; border-radius: 10px; background: var(--night);
+        display: flex; align-items: center; justify-content: center; flex: none;
+      }
+      .name { font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+
+      /* ── Égaliseur : reprise du motif du logo, en grand ── */
+      .bars { display: flex; gap: 5px; align-items: center; height: 36px; }
+      .bars i {
+        display: block; width: 4px; border-radius: 2px; background: var(--line-soft);
+        transform-origin: center;
+        animation: pulse 1.15s ease-in-out infinite;
+      }
+      .bars i:nth-child(1) { height: 14px; animation-delay: 0s; }
+      .bars i:nth-child(2) { height: 26px; animation-delay: .09s; }
+      .bars i:nth-child(3) { height: 36px; background: var(--accent); animation-delay: .18s; }
+      .bars i:nth-child(4) { height: 21px; animation-delay: .27s; }
+      .bars i:nth-child(5) { height: 31px; animation-delay: .36s; }
+      .bars i:nth-child(6) { height: 12px; animation-delay: .45s; }
+      .bars i:nth-child(7) { height: 19px; animation-delay: .54s; }
+      @keyframes pulse {
+        0%, 100% { transform: scaleY(.4); opacity: .5; }
+        50%      { transform: scaleY(1);  opacity: 1; }
+      }
+
+      #msg {
+        color: var(--ink-body); text-align: center;
+        max-width: 440px; min-height: 44px;
+      }
+      #msg .em { font-weight: 600; color: var(--ink); }
+
+      /* Bouton identique au .btn-primary de l'application. */
+      #skip {
+        -webkit-app-region: no-drag;
+        display: none;
+        background: var(--night); color: var(--cream);
+        font-family: inherit; font-size: 13.5px; font-weight: 600;
+        padding: 12px 22px; border: none; border-radius: 11px;
+        cursor: pointer; transition: opacity .15s;
+      }
+      #skip:hover { opacity: .88; }
+      #skip:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+      #hint {
+        font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em;
+        color: var(--muted); text-align: center; max-width: 460px;
+      }
+
+      /* État d'erreur : on garde la charte, on change seulement l'accent. */
+      body.is-error .bars i:nth-child(3) { background: var(--faint); }
+
+      @media (prefers-reduced-motion: reduce) {
+        .bars i { animation: none; opacity: .85; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="brand">
+      <div class="mark">
+        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="3" y="7" width="2.2" height="6" rx="1.1" fill="#F5F3EF"/>
+          <rect x="7" y="4" width="2.2" height="12" rx="1.1" fill="#F5F3EF"/>
+          <rect x="11" y="6.5" width="2.2" height="7" rx="1.1" fill="#0FF302"/>
+          <rect x="15" y="8.5" width="2.2" height="3" rx="1.1" fill="#F5F3EF"/>
+        </svg>
+      </div>
+      <div class="name">Transcriber</div>
+    </div>
+
+    <div class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+    <p id="msg" role="status" aria-live="polite">Démarrage du moteur de transcription…</p>
+    <button id="skip" type="button">Continuer sans attendre</button>
+    <p id="hint"></p>
+
+    <script>
+      const msg = document.getElementById('msg');
+      const hint = document.getElementById('hint');
+      const skip = document.getElementById('skip');
+      let serverReady = false;
+
+      skip.addEventListener('click', () => window.splash.continue());
+
+      window.splash.onServerReady(() => {
+        serverReady = true;
+        skip.style.display = 'inline-block';
+      });
+
+      function render(st) {
+        if (!serverReady && st.state !== 'downloading') return;
+        if (st.state === 'downloading') {
+          // st.model vient d'engine-status.json, écrit par le backend d'après une
+          // variable d'environnement : on l'insère comme texte, jamais comme HTML.
+          const em = document.createElement('span');
+          em.className = 'em';
+          em.textContent = 'Premier lancement';
+          msg.replaceChildren(
+            em,
+            document.createElement('br'),
+            document.createTextNode(
+              'Téléchargement du modèle de transcription (' +
+                (st.model || 'base') +
+                '). Environ 138 Mo, une seule fois.'
+            )
+          );
+          hint.textContent = 'Vous pouvez déjà continuer : le téléchargement se poursuit en fond.';
+          skip.style.display = 'inline-block';
+        } else if (st.state === 'ready') {
+          msg.textContent = 'Moteur prêt.';
+          window.splash.continue();
+        } else if (st.state === 'error') {
+          document.body.classList.add('is-error');
+          msg.textContent = 'Le modèle n’a pas pu être téléchargé (connexion ?).';
+          hint.textContent = 'L’application s’ouvre quand même ; réessai à la prochaine transcription.';
+          skip.style.display = 'inline-block';
+        }
+      }
+
+      async function poll() {
+        try {
+          render(await window.splash.status());
+        } catch (_) {
+          /* le moteur n'est pas encore là */
+        }
+        setTimeout(poll, 1000);
+      }
+      poll();
+    </script>
+  </body>
+</html>

@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import os
 import asyncio
@@ -12,7 +12,19 @@ import aiofiles
 import uuid
 import json
 import re
+import secrets
+import shutil
 import openai
+
+# yt-dlp 的更新必须在导入之前生效，否则冻结在安装包里的那份已经被载入。
+# 这段刻意放在 video_processor 之前，别挪到下面去。
+_EARLY_DATA_ROOT = Path(os.getenv("AVT_DATA_DIR", str(Path(__file__).parent.parent)))
+try:
+    from ytdlp_updater import activate as _activate_ytdlp
+
+    _activate_ytdlp(_EARLY_DATA_ROOT)
+except Exception as _e:  # 更新目录损坏也不能让应用起不来
+    logging.getLogger(__name__).warning(f"启用更新版 yt-dlp 失败，使用随应用分发的版本: {_e}")
 
 from video_processor import VideoProcessor
 from transcriber import Transcriber
@@ -29,6 +41,7 @@ from pipeline import (
     txt_to_raw_transcript_markdown as _txt_to_raw_transcript_markdown,
 )
 from diarizer import Diarizer
+from library import LibraryStore
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -36,24 +49,116 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI视频转录器", version="1.0.0")
 
-# CORS中间件配置
+# 本地访问令牌（桌面版由 Electron 在启动后端时注入 AVT_TOKEN）。
+#
+# 桌面版把后端监听在 127.0.0.1，但浏览器里的任意网页也能访问该地址：
+# 若不加限制，用户随便打开一个页面就能读取整个转录库——包括长期保存的
+# 原始音频。设置 AVT_TOKEN 后：
+#   1) 不再输出 CORS 头，跨源读取被浏览器拦截；
+#   2) /api 与 /ws 需携带令牌，令牌由服务端注入到 index.html，页面自带；
+#   3) 校验 Host，阻断 DNS 重绑定。
+# 未设置时行为与旧版完全一致，Web/Docker 部署不受影响。
+AVT_TOKEN = os.getenv("AVT_TOKEN", "").strip()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # 有令牌即桌面版：页面与接口同源，无需任何跨源许可
+    allow_origins=[] if AVT_TOKEN else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+_TOKEN_EXEMPT_PATHS = frozenset({"/api/health"})
+_ALLOWED_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+
+
+@app.middleware("http")
+async def _local_access_guard(request, call_next):
+    """桌面版的本地访问校验；未设置 AVT_TOKEN 时直接放行。"""
+    if not AVT_TOKEN:
+        return await call_next(request)
+
+    # Host 只允许回环地址，挫败 DNS 重绑定（域名解析到 127.0.0.1）
+    host = (request.headers.get("host") or "").split(":")[0]
+    if host and host not in _ALLOWED_HOSTS:
+        return JSONResponse({"detail": "主机名不被允许"}, status_code=403)
+
+    path = request.url.path
+    if path.startswith(("/api", "/ws")) and path not in _TOKEN_EXEMPT_PATHS:
+        supplied = (
+            request.headers.get("x-avt-token")
+            or request.query_params.get("token")
+            or ""
+        )
+        if not secrets.compare_digest(supplied, AVT_TOKEN):
+            return JSONResponse({"detail": "缺少或无效的本地访问令牌"}, status_code=401)
+
+    return await call_next(request)
+
 # 获取项目根目录
 PROJECT_ROOT = Path(__file__).parent.parent
 
+# 桌面版（PyInstaller/Electron）通过环境变量覆盖静态资源与数据目录
+STATIC_DIR = Path(os.getenv("AVT_STATIC_DIR", str(PROJECT_ROOT / "static")))
+DATA_ROOT = Path(os.getenv("AVT_DATA_DIR", str(PROJECT_ROOT)))
+
 # 挂载静态文件
-app.mount("/static", StaticFiles(directory=str(PROJECT_ROOT / "static")), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # 创建临时目录
-TEMP_DIR = PROJECT_ROOT / "temp"
-TEMP_DIR.mkdir(exist_ok=True)
+TEMP_DIR = DATA_ROOT / "temp"
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+# 用户可把转录库放到别的盘：系统盘往往先满，而这个库只增不减。
+# 选择记在 DATA_ROOT/config.json（很小，始终留在默认位置）。
+CONFIG_FILE = DATA_ROOT / "config.json"
+
+
+def load_app_config() -> dict:
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f) or {}
+    except Exception as e:
+        logger.warning(f"读取配置失败，使用默认值: {e}")
+    return {}
+
+
+def save_app_config(cfg: dict) -> None:
+    tmp = CONFIG_FILE.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    os.replace(str(tmp), str(CONFIG_FILE))
+
+
+def resolve_library_dir() -> Path:
+    """配置指定的库目录；未配置或不可用时回落到默认位置。"""
+    configured = (load_app_config().get("library_dir") or "").strip()
+    if configured:
+        path = Path(configured)
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        except OSError as e:
+            # 目标盘拔掉了也不能让程序起不来：回默认位置并说明原因
+            logger.error(f"配置的转录库目录不可用（{configured}），回落到默认位置: {e}")
+    return DATA_ROOT / "library"
+
+
+# 登录态浏览器的选择同样记在配置里，启动时恢复
+_cookies_browser = (load_app_config().get("cookies_browser") or "").strip().lower()
+if _cookies_browser:
+    os.environ.setdefault("AVT_COOKIES_BROWSER", _cookies_browser)
+
+# 转录库：任务完成后产物从 temp 迁入此处长期保存
+LIBRARY_DIR = resolve_library_dir()
+library_store = LibraryStore(LIBRARY_DIR)
+try:
+    # 磁盘为准：补录索引里缺失的记录，剔除目录已消失的行
+    library_store.reindex()
+except Exception as e:
+    logger.warning(f"转录库索引重建失败（不影响转录）: {e}")
 
 # 初始化处理器
 video_processor = VideoProcessor()
@@ -170,9 +275,18 @@ def _resolve_temp_file(filename: str, allowed_ext: frozenset) -> Path:
     # 二次防御：即使扩展名校验通过，也确认最终路径没跳出 temp
     if file_path.parent.resolve() != TEMP_DIR.resolve():
         raise HTTPException(status_code=400, detail="文件名格式无效")
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="文件不存在")
-    return file_path
+    if file_path.exists():
+        return file_path
+
+    # temp 里没有 → 可能已迁入转录库（任务完成即搬走），按原文件名回落解析。
+    # 路径不由文件名拼接，而是查表拿到记录后由库自身校验，故不会绕过上面的防御。
+    located = library_store.find_by_filename(filename)
+    if located:
+        archived = library_store.asset_path(*located)
+        if archived is not None:
+            return archived
+
+    raise HTTPException(status_code=404, detail="文件不存在")
 
 
 def _safe_download_name(raw: str, expected_ext: str) -> Optional[str]:
@@ -320,6 +434,104 @@ async def _maybe_diarize(task_id: str, audio_path: str, segments, raw_script: st
     return segments, raw_script
 
 
+def _explain_failure(error: object) -> dict:
+    """任务失败原因的可读解释；模块缺失时也要给出点什么。"""
+    try:
+        from download_hints import explain
+
+        return explain(error)
+    except Exception:
+        return {"reason": "unknown", "message": "Le traitement a échoué.",
+                "hint": "Réessayez.", "detail": str(error)}
+
+
+def _platform_from_url(url: str) -> str:
+    """从来源 URL 粗略识别平台名，仅用于列表展示。"""
+    if not url or not url.startswith("http"):
+        return "upload"
+    host = re.sub(r"^https?://(www\.)?", "", url).split("/")[0].lower()
+    known = {
+        "youtube.com": "youtube", "youtu.be": "youtube",
+        "bilibili.com": "bilibili", "b23.tv": "bilibili",
+        "vimeo.com": "vimeo", "twitter.com": "twitter", "x.com": "twitter",
+        "tiktok.com": "tiktok", "douyin.com": "douyin",
+    }
+    for domain, name in known.items():
+        if host == domain or host.endswith("." + domain):
+            return name
+    return host or "web"
+
+
+def _archive_task_to_library(
+    task_id: str,
+    segments: Optional[list] = None,
+    whisper_model: str = "",
+) -> None:
+    """任务完成后把产物从 temp 迁入转录库。
+
+    产物是**移动**而非复制：temp 随时可能被清空，迁走后旧的
+    /api/download/{filename}、/api/media/{filename} 链接靠库内的文件名映射继续解析。
+    失败绝不能影响任务本身——用户已经拿到结果，归档只是持久化。
+    """
+    task = tasks.get(task_id)
+    if not task:
+        return
+
+    def _temp(name: Optional[str]) -> Optional[Path]:
+        if not name:
+            return None
+        path = TEMP_DIR / Path(str(name)).name
+        return path if path.is_file() else None
+
+    assets: dict = {}
+    for kind, name in (
+        ("srt", task.get("srt_filename")),
+        ("vtt", task.get("vtt_filename")),
+        ("raw", task.get("raw_script_file")),
+        ("script", task.get("script_path")),
+        ("summary", task.get("summary_path")),
+        ("translation", task.get("translation_path")),
+    ):
+        path = _temp(name)
+        if path:
+            assets[kind] = path
+
+    media_name = task.get("media_filename")
+    media_path = _temp(media_name)
+    if media_path:
+        assets[_media_kind(media_path.suffix.lower())] = media_path
+
+    created_at = task.get("created_at") or time.time()
+    url = task.get("url") or ""
+    entry = {
+        "title": task.get("video_title") or "(untitled)",
+        "created_at": created_at,
+        "platform": _platform_from_url(url),
+        "source_url": url if url.startswith("http") else "",
+        "lang_src": task.get("detected_language") or "",
+        "lang_dst": task.get("summary_language") or "",
+        "model": task.get("whisper_model") or whisper_model or WHISPER_MODEL_DEFAULT,
+        "source_mode": task.get("source_mode") or "",
+        "elapsed_ms": int(max(0.0, time.time() - created_at) * 1000),
+        "no_speech": bool(task.get("no_speech")),
+        "script": task.get("script") or "",
+        "summary": task.get("summary") or "",
+        "translation": task.get("translation") or "",
+        # 保留分段，日后可重新导出字幕而无需重跑 Whisper
+        "segments": segments or [],
+        "media_download_name": task.get("media_download_name") or "",
+        # 媒体体积单独留存：条目总大小含文本，前端展示播放器信息时需要精确值
+        "media_size_bytes": task.get("media_size_bytes") or 0,
+    }
+
+    try:
+        item = library_store.add(entry, assets=assets, entry_id=task_id)
+        tasks[task_id]["library_id"] = item.get("id") or task_id
+        save_tasks(tasks)
+    except Exception as e:
+        logger.error(f"归档到转录库失败（结果仍可用）: {e}")
+
+
 async def _run_post_extract_pipeline(
     task_id: str,
     raw_script: str,
@@ -406,6 +618,8 @@ async def _run_post_extract_pipeline(
 
         tasks[task_id].update(task_result)
         save_tasks(tasks)
+        # 广播前归档：先搬完文件，前端拿到结果时链接已能解析到库内
+        await asyncio.to_thread(_archive_task_to_library, task_id, segments)
         await broadcast_task_update(task_id, tasks[task_id])
 
         if dedup_url:
@@ -535,6 +749,8 @@ async def _run_post_extract_pipeline(
 
     tasks[task_id].update(task_result)
     save_tasks(tasks)
+    # 广播前归档：先搬完文件，前端拿到结果时链接已能解析到库内
+    await asyncio.to_thread(_archive_task_to_library, task_id, segments)
     logger.info(f"任务完成，准备广播最终状态: {task_id}")
     await broadcast_task_update(task_id, tasks[task_id])
     logger.info(f"最终状态已广播: {task_id}")
@@ -547,8 +763,33 @@ async def _run_post_extract_pipeline(
 
 @app.get("/")
 async def read_root():
-    """返回前端页面"""
-    return FileResponse(str(PROJECT_ROOT / "static" / "index.html"))
+    """返回前端页面。
+
+    桌面版会把本地访问令牌注入页面：接口与页面同源，前端因此无需任何配置，
+    而浏览器里的第三方页面拿不到这个令牌。
+    """
+    index_path = STATIC_DIR / "index.html"
+    if not AVT_TOKEN:
+        return FileResponse(str(index_path))
+
+    html = index_path.read_text(encoding="utf-8")
+    injected = f'<script>window.__AVT_TOKEN__ = "{AVT_TOKEN}";</script>'
+    html = html.replace("</head>", f"{injected}\n</head>", 1)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
+
+def _ws_token_ok(ws: WebSocket) -> bool:
+    """WebSocket 不经过 HTTP 中间件，需单独校验令牌。"""
+    if not AVT_TOKEN:
+        return True
+    return secrets.compare_digest(ws.query_params.get("token") or "", AVT_TOKEN)
+
+
+@app.get("/api/health")
+async def health_check():
+    """健康检查（桌面版启动探测用）"""
+    return {"status": "ok"}
+
 
 @app.post("/api/models")
 async def list_models(
@@ -897,7 +1138,9 @@ async def process_video_task(
         tasks[task_id].update({
             "status": "error",
             "error": str(e),
-            "message": f"处理失败: {str(e)}"
+            # 给用户可执行的说明，而不是一句英文技术信息
+            "error_reason": _explain_failure(e)["reason"],
+            "message": _explain_failure(e)["message"] + " " + _explain_failure(e)["hint"]
         })
         save_tasks(tasks)
         await broadcast_task_update(task_id, tasks[task_id])
@@ -1019,48 +1262,41 @@ async def process_upload_task(
         tasks[task_id].update({
             "status": "error",
             "error": str(e),
-            "message": f"处理失败: {str(e)}",
+            # 给用户可执行的说明，而不是一句英文技术信息
+            "error_reason": _explain_failure(e)["reason"],
+            "message": _explain_failure(e)["message"] + " " + _explain_failure(e)["hint"],
         })
         save_tasks(tasks)
         await broadcast_task_update(task_id, tasks[task_id])
 
 
 def _local_chat_answer(transcript: str, question: str, top_k: int = 4) -> str:
+    """无 LLM 时的本地检索：BM25 找出转录中最相关的段落并原样引用。
+
+    这里**不生成**答案。没有模型就没有生成，把检索结果包装成一段像模像样的
+    回答，等于凭空捏造。返回原文片段，让用户自己判断。
     """
-    无 LLM 的本地问答回退：按问题词项与句子的重叠度打分，
-    返回最相关的转录片段（按原文顺序）。
-    """
-    # 去掉 Markdown 头部与时间戳行，仅保留正文
-    body_lines = [l.strip() for l in transcript.split("\n")
-                  if l.strip() and not l.startswith("#") and not l.startswith("**")]
-    sentences = []
-    for line in body_lines:
-        sentences.extend(s.strip() for s in re.split(r"(?<=[.!?。！？])\s+", line) if len(s.strip()) >= 15)
-    if not sentences:
-        return "Transcript vide — rien à chercher. / 转录为空。"
+    try:
+        from local_chat import search_passages
 
-    q_terms = {w for w in re.findall(r"\w+", question.lower()) if len(w) > 1}
-    if not q_terms:
-        return "Question trop courte pour une recherche locale."
+        hits = search_passages(transcript, question, top_k=top_k)
+    except Exception as e:
+        logger.warning(f"本地检索失败: {e}")
+        hits = []
 
-    scored = []
-    for i, s in enumerate(sentences):
-        s_terms = {w for w in re.findall(r"\w+", s.lower()) if len(w) > 1}
-        if not s_terms:
-            continue
-        overlap = len(q_terms & s_terms)
-        if overlap:
-            scored.append((overlap / len(q_terms), i, s))
+    if not hits:
+        return (
+            "Aucun passage de la transcription ne correspond à cette question.\n\n"
+            "*Recherche locale, sans IA. Pour une réponse rédigée, ajoutez une clé API "
+            "dans Paramètres.*"
+        )
 
-    if not scored:
-        return ("Aucun passage du transcript ne correspond à la question "
-                "(recherche locale sans IA — ajoutez une clé API dans Paramètres pour des réponses générées).")
-
-    top = sorted(scored, key=lambda x: -x[0])[:top_k]
-    top.sort(key=lambda x: x[1])
-    excerpts = "\n\n".join(f"> {s}" for _, _, s in top)
-    return (f"**Passages du transcript les plus pertinents** (mode local, sans clé API) :\n\n{excerpts}\n\n"
-            "*Pour des réponses rédigées par IA, renseignez une clé API dans Paramètres.*")
+    excerpts = "\n\n".join(f"> {h['text']}" for h in hits)
+    return (
+        f"**Passages les plus pertinents de la transcription** :\n\n{excerpts}\n\n"
+        "*Recherche locale, sans IA : ces extraits sont cités tels quels, ils ne sont "
+        "pas une réponse rédigée. Ajoutez une clé API dans Paramètres pour une synthèse.*"
+    )
 
 
 @app.post("/api/chat")
@@ -1145,9 +1381,389 @@ async def chat_with_transcript(
         return {"answer": f"{local}\n\n*(API indisponible : {e})*", "local": True}
 
 
+# ── 本地翻译引擎 ─────────────────────────────────────────────────────
+# 模型 646 MB，下载**只能由用户在界面上点出来**，绝不在一次转录里悄悄发生。
+
+_translate_download_thread: Optional[threading.Thread] = None
+
+
+@app.get("/api/translate/status")
+async def translate_status():
+    """本地翻译模型的状态与下载进度。"""
+    from local_translate import get_local_translator
+
+    status = get_local_translator().progress_snapshot()
+    status["downloading"] = bool(
+        _translate_download_thread and _translate_download_thread.is_alive()
+    )
+    return status
+
+
+@app.post("/api/translate/download")
+async def translate_download():
+    """开始下载本地翻译模型（幂等；已在下载或已就绪时直接返回状态）。"""
+    global _translate_download_thread
+    from local_translate import get_local_translator
+
+    engine = get_local_translator()
+    if engine.is_downloaded:
+        return {"started": False, "reason": "already_downloaded", **engine.progress_snapshot()}
+    if _translate_download_thread and _translate_download_thread.is_alive():
+        return {"started": False, "reason": "already_downloading", **engine.progress_snapshot()}
+
+    def _run():
+        try:
+            engine.load()          # 下载后顺带加载，首次翻译就不用再等
+        except Exception as e:
+            logger.error(f"翻译模型准备失败: {e}")
+
+    _translate_download_thread = threading.Thread(
+        target=_run, name="translate-model-download", daemon=True
+    )
+    _translate_download_thread.start()
+    return {"started": True, **engine.progress_snapshot()}
+
+
+# ── 转录库（历史记录）────────────────────────────────────────────────
+# 路由顺序有讲究：/api/library/stats 等固定路径必须声明在 /api/library/{entry_id}
+# 之前，否则会被当成 entry_id 捕获。
+
+
+_relocation: dict = {"state": "idle", "copied_bytes": 0, "total_bytes": 0, "target": "", "error": None}
+_relocation_lock = threading.Lock()
+
+
+def _dir_bytes(path: Path) -> int:
+    total = 0
+    for p in path.rglob("*"):
+        try:
+            if p.is_file():
+                total += p.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
+def _relocate_library(target: Path) -> None:
+    """把整个库搬到 target。
+
+    顺序是**先复制、校验、切换，最后才删原件**。这是用户的全部转录和原始音频，
+    中途断电也不能出现两边都没有的瞬间。
+    """
+    global library_store, LIBRARY_DIR
+    source = LIBRARY_DIR
+    try:
+        _relocation.update({"state": "copying", "copied_bytes": 0,
+                            "total_bytes": _dir_bytes(source), "target": str(target), "error": None})
+        target.mkdir(parents=True, exist_ok=True)
+
+        with _relocation_lock:
+            library_store.close()          # 关掉 SQLite，避免复制到写了一半的索引
+
+        for item in source.rglob("*"):
+            rel = item.relative_to(source)
+            dest = target / rel
+            if item.is_dir():
+                dest.mkdir(parents=True, exist_ok=True)
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(item), str(dest))
+            try:
+                _relocation["copied_bytes"] += dest.stat().st_size
+            except OSError:
+                pass
+
+        # 校验：条数对得上才认为搬家成功
+        moved_store = LibraryStore(target)
+        moved_store.reindex()
+        moved_count = moved_store.list(limit=1)[1]
+        old_store = LibraryStore(source)
+        old_count = old_store.list(limit=1)[1]
+        old_store.close()
+        if moved_count < old_count:
+            moved_store.close()
+            raise RuntimeError(f"复制不完整：原 {old_count} 条，新 {moved_count} 条")
+
+        library_store = moved_store
+        LIBRARY_DIR = target
+        cfg = load_app_config()
+        cfg["library_dir"] = str(target)
+        save_app_config(cfg)
+
+        shutil.rmtree(str(source), ignore_errors=True)   # 确认无误后才删
+        _relocation.update({"state": "done"})
+        logger.info(f"转录库已迁移到 {target}")
+    except Exception as e:
+        logger.error(f"转录库迁移失败: {e}")
+        # 失败时把原库重新打开，用户的数据一直在原处，没有丢
+        try:
+            library_store = LibraryStore(source)
+        except Exception:
+            pass
+        _relocation.update({"state": "error", "error": str(e)})
+
+
+_ytdlp_thread: Optional[threading.Thread] = None
+_ytdlp_result: dict = {}
+
+
+@app.get("/api/updater/ytdlp")
+async def ytdlp_status(check: bool = False):
+    """当前 yt-dlp 版本、是否用了更新版，以及可选的最新版查询。
+
+    check=false 时不联网：状态面板不应该每次打开都去戳 PyPI。
+    """
+    import ytdlp_updater as up
+
+    state = up.status()
+    data = {
+        "installed": up.installed_version(),
+        "override_active": up.is_override_active(_EARLY_DATA_ROOT),
+        # none / active / ignored_older / too_late — pourquoi la surcharge n'est pas prise
+        "override": state.get("override", "none"),
+        "override_version": state.get("override_version", ""),
+        "bundled_version": state.get("bundled_version", ""),
+        "updating": bool(_ytdlp_thread and _ytdlp_thread.is_alive()),
+        "progress": up.status(),
+        "last_result": _ytdlp_result,
+    }
+    if check:
+        try:
+            data["latest"] = up.latest_version()["version"]
+        except Exception as e:
+            data["check_error"] = str(e)
+    return data
+
+
+@app.post("/api/updater/ytdlp")
+async def ytdlp_update():
+    """下载并启用最新版 yt-dlp（重启后生效）。"""
+    global _ytdlp_thread
+    import ytdlp_updater as up
+
+    if _ytdlp_thread and _ytdlp_thread.is_alive():
+        return {"started": False, "reason": "already_running"}
+
+    def _run():
+        global _ytdlp_result
+        try:
+            _ytdlp_result = up.install(_EARLY_DATA_ROOT)
+        except Exception as e:
+            logger.error(f"更新 yt-dlp 失败: {e}")
+            _ytdlp_result = {"updated": False, "error": str(e)}
+
+    _ytdlp_thread = threading.Thread(target=_run, name="ytdlp-update", daemon=True)
+    _ytdlp_thread.start()
+    return {"started": True}
+
+
+@app.delete("/api/updater/ytdlp")
+async def ytdlp_revert():
+    """回到随应用分发的版本。"""
+    import ytdlp_updater as up
+
+    reverted = up.revert(_EARLY_DATA_ROOT)
+    return {"reverted": reverted, "restart_required": reverted}
+
+
+@app.get("/api/platforms/auth")
+async def platforms_auth():
+    """当前用于读取 cookies 的浏览器，以及可选项。"""
+    return {
+        "browser": VideoProcessor.cookie_browser(),
+        "supported": list(VideoProcessor.SUPPORTED_BROWSERS),
+    }
+
+
+@app.post("/api/platforms/auth")
+async def set_platforms_auth(payload: dict = Body(...)):
+    """设置读取 cookies 的浏览器；空值表示不使用登录态。
+
+    cookies 只在本机读取并交给 yt-dlp，不写入任何文件，也不离开这台机器。
+    """
+    browser = (payload.get("browser") or "").strip().lower()
+    if browser and browser not in VideoProcessor.SUPPORTED_BROWSERS:
+        raise HTTPException(status_code=400, detail=f"浏览器不受支持: {browser}")
+
+    cfg = load_app_config()
+    cfg["cookies_browser"] = browser
+    save_app_config(cfg)
+    # 立即生效，无需重启
+    if browser:
+        os.environ["AVT_COOKIES_BROWSER"] = browser
+    else:
+        os.environ.pop("AVT_COOKIES_BROWSER", None)
+    return {"browser": VideoProcessor.cookie_browser()}
+
+
+@app.get("/api/library/location")
+async def library_location():
+    """当前库位置与所在磁盘的剩余空间。"""
+    usage = shutil.disk_usage(str(LIBRARY_DIR)) if LIBRARY_DIR.exists() else None
+    return {
+        "path": str(LIBRARY_DIR),
+        "default_path": str(DATA_ROOT / "library"),
+        "is_default": LIBRARY_DIR == DATA_ROOT / "library",
+        "free_bytes": usage.free if usage else None,
+        "total_bytes": usage.total if usage else None,
+        "relocation": dict(_relocation),
+    }
+
+
+@app.post("/api/library/location")
+async def set_library_location(payload: dict = Body(...)):
+    """更换库位置并搬迁内容。空路径表示恢复默认位置。"""
+    if _relocation.get("state") == "copying":
+        raise HTTPException(status_code=409, detail="迁移正在进行中")
+
+    raw = (payload.get("path") or "").strip()
+    target = (DATA_ROOT / "library") if not raw else Path(raw).expanduser()
+    try:
+        target = target.resolve()
+    except OSError as e:
+        raise HTTPException(status_code=400, detail=f"路径无效: {e}")
+
+    if target == LIBRARY_DIR.resolve():
+        return {"started": False, "reason": "same_path", "path": str(LIBRARY_DIR)}
+    # 目标不能落在当前库里面，否则边复制边被自己吞掉
+    if str(target).startswith(str(LIBRARY_DIR.resolve()) + os.sep):
+        raise HTTPException(status_code=400, detail="目标目录不能位于当前库内部")
+
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        probe = target / ".avt-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+    except OSError as e:
+        raise HTTPException(status_code=400, detail=f"目标目录不可写: {e}")
+
+    needed = _dir_bytes(LIBRARY_DIR)
+    free = shutil.disk_usage(str(target)).free
+    if free < needed * 1.1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"目标磁盘空间不足：需要约 {needed // (1024*1024)} MB，可用 {free // (1024*1024)} MB",
+        )
+
+    threading.Thread(target=_relocate_library, args=(target,), daemon=True,
+                     name="library-relocate").start()
+    return {"started": True, "target": str(target), "total_bytes": needed}
+
+
+@app.get("/api/library/stats")
+async def library_stats():
+    """记录数与磁盘占用，供界面的“磁盘空间”面板展示。"""
+    return library_store.stats()
+
+
+@app.post("/api/library/import")
+async def library_import(payload: dict = Body(...)):
+    """从旧的 localStorage 历史一次性导入（产物文件已丢失，只搬文本）。"""
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=400, detail="entries 必须是数组")
+    imported = await asyncio.to_thread(library_store.import_entries, entries)
+    return {"imported": imported, "total": library_store.stats()["count"]}
+
+
+@app.post("/api/library/free-space")
+async def library_free_space(payload: dict = Body(default={})):
+    """按 id 列表丢弃媒体文件、保留文本。
+
+    只在用户明确点击“释放空间”时调用：本产品不做任何自动清理。
+    不传 ids 时仅返回候选列表，不删除任何内容。
+    """
+    ids = payload.get("ids")
+    if not isinstance(ids, list) or not ids:
+        candidates = library_store.purge_candidates(
+            older_than_days=float(payload.get("older_than_days") or 0),
+            keep_favorites=payload.get("keep_favorites", True),
+        )
+        return {"candidates": candidates, "freed": 0}
+
+    freed = 0
+    for entry_id in ids:
+        if isinstance(entry_id, str):
+            freed += await asyncio.to_thread(library_store.drop_assets, entry_id)
+    return {"freed": freed, "stats": library_store.stats()}
+
+
+@app.get("/api/library")
+async def library_list(
+    q: str = "",
+    limit: int = 50,
+    offset: int = 0,
+    favorites_only: bool = False,
+):
+    """分页列出记录（仅元数据，不含全文），按创建时间倒序。"""
+    items, total = library_store.list(q=q, limit=limit, offset=offset, favorites_only=favorites_only)
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+@app.get("/api/library/{entry_id}")
+async def library_get(entry_id: str):
+    """完整记录：元数据 + 全文（转录、摘要、翻译、分段）。"""
+    record = library_store.get(entry_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return record
+
+
+@app.patch("/api/library/{entry_id}")
+async def library_update(entry_id: str, payload: dict = Body(...)):
+    """重命名（title）或标星（favorite）。"""
+    title = payload.get("title")
+    favorite = payload.get("favorite")
+    if title is None and favorite is None:
+        raise HTTPException(status_code=400, detail="没有可更新的字段")
+    if title is not None and not str(title).strip():
+        raise HTTPException(status_code=400, detail="标题不能为空")
+    updated = library_store.update(
+        entry_id,
+        title=str(title).strip() if title is not None else None,
+        favorite=bool(favorite) if favorite is not None else None,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return updated
+
+
+@app.delete("/api/library/{entry_id}")
+async def library_delete(entry_id: str):
+    """彻底删除一条记录及其全部文件。仅由用户主动触发。"""
+    if not await asyncio.to_thread(library_store.delete, entry_id):
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return {"deleted": entry_id, "stats": library_store.stats()}
+
+
+@app.get("/api/library/{entry_id}/asset/{kind}")
+async def library_asset(entry_id: str, kind: str, download: bool = False):
+    """取记录的产物文件（audio/video/srt/vtt/raw/script/summary/translation）。
+
+    download=false（默认）内联播放，FileResponse 自带 Range 支持；
+    download=true 时按记录标题生成下载名。
+    """
+    path = library_store.asset_path(entry_id, kind)
+    if path is None:
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    ext = path.suffix.lower()
+    media_type = TEXT_DOWNLOAD_MIME.get(ext) or MEDIA_MIME.get(ext) or "application/octet-stream"
+    if not download:
+        return FileResponse(
+            path,
+            media_type=media_type,
+            headers={"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"},
+        )
+
+    meta = library_store.get_meta(entry_id) or {}
+    stem = _sanitize_title_for_filename(meta.get("title") or entry_id)
+    return FileResponse(path, media_type=media_type, filename=f"{stem}{ext}")
+
+
 @app.get("/api/history")
 async def get_history(limit: int = 100):
-    """已完成任务的紧凑列表（历史记录），按创建时间倒序。"""
+    """已完成任务的紧凑列表。**已废弃**：新界面请用 /api/library。"""
     items = []
     for tid, t in tasks.items():
         if t.get("status") != "completed":
@@ -1346,6 +1962,10 @@ async def live_transcribe(ws: WebSocket):
       服务端 → 客户端: {"type":"ready"} / {"type":"delta","text"} /
                        {"type":"utterance","text"} / {"type":"error","message"}
     """
+    if not _ws_token_ok(ws):
+        await ws.close(code=1008)
+        return
+
     await ws.accept()
     oai = None
     try:
@@ -1485,6 +2105,10 @@ async def live_local_transcribe(ws: WebSocket):
                {"type":"utterance","text"}（最终结果）/ {"type":"error","message"}
     说明：整段缓冲重转录，间隔自适应（至少 3 秒新音频且上一轮已结束）。
     """
+    if not _ws_token_ok(ws):
+        await ws.close(code=1008)
+        return
+
     import base64
 
     await ws.accept()
