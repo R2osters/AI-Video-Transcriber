@@ -77,6 +77,8 @@ jobs:
             "ffmpeg et ffprobe embarques sont en x86_64 et passent par Rosetta 2. L'application elle-meme est native arm64." \
             "" \
             "Construit par la CI sur un runner macOS, jamais teste sur une machine reelle." \
+            "" \
+            "Ce n'est pas le point de telechargement : le paquet est recopie a la main dans R2osters/transcriber-downloads, ou Windows et macOS sont publies ensemble. Un workflow ne peut publier que dans son propre depot sans jeton personnel." \
             > notes.md
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
