@@ -138,8 +138,16 @@ def main() -> None:
     # Static embarqué (spec PyInstaller copie static/ dans le bundle)
     os.environ.setdefault("AVT_STATIC_DIR", str(res / "static"))
 
-    # Données utilisateur hors du dossier d'installation (Program Files = lecture seule)
-    default_data = Path(os.getenv("LOCALAPPDATA", str(Path.home()))) / "AI-Video-Transcriber"
+    # Données utilisateur hors du dossier d'installation (Program Files et
+    # /Applications sont en lecture seule). Emplacement conventionnel par
+    # système ; main.js calcule le même et le passe en AVT_DATA_DIR.
+    home = Path.home()
+    if sys.platform == "win32":
+        default_data = Path(os.getenv("LOCALAPPDATA", str(home))) / "AI-Video-Transcriber"
+    elif sys.platform == "darwin":
+        default_data = home / "Library" / "Application Support" / "AI-Video-Transcriber"
+    else:
+        default_data = home / ".local" / "share" / "AI-Video-Transcriber"
     data_dir = Path(os.environ.setdefault("AVT_DATA_DIR", str(default_data)))
     data_dir.mkdir(parents=True, exist_ok=True)
 

@@ -25,9 +25,20 @@ let baseUrl = `http://127.0.0.1:${port}`;
 
 // Données utilisateur : même dossier que celui calculé par backend_entry.py.
 // On le passe explicitement au backend pour que les deux côtés soient d'accord.
-const DATA_DIR =
-  process.env.AVT_DATA_DIR ||
-  path.join(process.env.LOCALAPPDATA || app.getPath('home'), 'AI-Video-Transcriber');
+// Chaque système a son emplacement conventionnel ; backend_entry.py calcule le
+// même, pour que l'exe reste utilisable seul.
+function defaultDataDir() {
+  const home = app.getPath('home');
+  if (process.platform === 'win32') {
+    return path.join(process.env.LOCALAPPDATA || home, 'AI-Video-Transcriber');
+  }
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Application Support', 'AI-Video-Transcriber');
+  }
+  return path.join(home, '.local', 'share', 'AI-Video-Transcriber');
+}
+
+const DATA_DIR = process.env.AVT_DATA_DIR || defaultDataDir();
 
 let backendProc = null;
 let mainWindow = null;
@@ -65,7 +76,8 @@ async function pickPort() {
 
 function backendCommand() {
   if (app.isPackaged) {
-    const exe = path.join(process.resourcesPath, 'backend', 'AVT-Backend', 'AVT-Backend.exe');
+    const name = process.platform === 'win32' ? 'AVT-Backend.exe' : 'AVT-Backend';
+    const exe = path.join(process.resourcesPath, 'backend', 'AVT-Backend', name);
     return { cmd: exe, args: [], cwd: path.dirname(exe) };
   }
   // Mode dev : backend du dépôt, mêmes sources que la version web.

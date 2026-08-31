@@ -10,7 +10,11 @@
     "build:backend": "powershell -ExecutionPolicy Bypass -File scripts/build-backend.ps1",
     "ffmpeg": "powershell -ExecutionPolicy Bypass -File scripts/download-ffmpeg.ps1",
     "dist": "electron-builder --win",
-    "dist:full": "npm run build:backend && npm run ffmpeg && electron-builder --win"
+    "dist:full": "npm run build:backend && npm run ffmpeg && electron-builder --win",
+    "build:backend:unix": "bash scripts/build-backend.sh",
+    "ffmpeg:unix": "bash scripts/download-ffmpeg.sh",
+    "dist:mac": "electron-builder --mac",
+    "dist:full:mac": "npm run build:backend:unix && npm run ffmpeg:unix && electron-builder --mac"
   },
   "devDependencies": {
     "electron": "^38.2.0",
@@ -38,6 +42,26 @@
         "to": "bin"
       }
     ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null
+    },
     "win": {
       "icon": "build/icon.ico",
       "target": [

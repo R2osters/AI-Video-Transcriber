@@ -1,0 +1,67 @@
+name: Build macOS
+
+# Le paquet macOS ne peut pas être fabriqué depuis Windows : PyInstaller produit
+# un binaire pour la plateforme qui l'exécute, et electron-builder a besoin des
+# outils du système (hdiutil, iconutil) pour le .dmg et l'icône. Cette CI est
+# donc le seul chemin de build Mac tant qu'aucun Mac physique n'est disponible.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version affichée dans le nom du paquet (informatif)"
+        required: false
+        default: ""
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    name: dmg + zip (arm64)
+    runs-on: macos-latest        # runners macOS 14+ = Apple Silicon
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Dépendances Electron
+        working-directory: desktop
+        run: npm install --no-audit --no-fund
+
+      # Construit AVT-Backend (PyInstaller onedir) et le vérifie en lançant le
+      # binaire avec AVT_SELFTEST=1 : sans cette étape, un import manquant ne se
+      # verrait qu'au premier lancement chez l'utilisateur.
+      - name: Backend (PyInstaller + selftest)
+        working-directory: desktop
+        run: bash scripts/build-backend.sh
+
+      - name: ffmpeg + ffprobe
+        working-directory: desktop
+        run: bash scripts/download-ffmpeg.sh
+
+      # Paquet non signé : pas de certificat Apple Developer. Gatekeeper le
+      # bloquera au premier lancement, le README explique le contournement.
+      - name: Paquet macOS
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --mac
+
+      - name: Inventaire
+        working-directory: desktop
+        run: ls -lh dist-installer/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-video-transcriber-macos-arm64
+          path: |
+            desktop/dist-installer/*.dmg
+            desktop/dist-installer/*.zip
+          if-no-files-found: error
+          retention-days: 14
