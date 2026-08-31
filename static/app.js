@@ -82,7 +82,10 @@ class App {
       b.classList.toggle('active', b.dataset.view === key));
     $('sidebar').classList.remove('open');
     if (name === 'history') this._renderHistory();
-    if (name === 'settings') this._refreshDisk();
+    if (name === 'settings') {
+      this._refreshDisk(); this._refreshEngine(); this._refreshLocation();
+      this._refreshAuth(); this._refreshYtdlp();
+    }
   }
 
   /* ── Bindings ─────────────────────────────────────────── */
@@ -155,6 +158,13 @@ class App {
 
     /* Espace disque */
     $('freeSpaceBtn').addEventListener('click', () => this._freeSpace());
+    $('downloadEngineBtn').addEventListener('click', () => this._downloadEngine());
+    $('relocateBtn').addEventListener('click', () => this._relocate());
+    $('resetLocationBtn').addEventListener('click', () => this._relocate(''));
+    $('cookieBrowser').addEventListener('change', () => this._saveAuth());
+    $('ytdlpCheckBtn').addEventListener('click', () => this._refreshYtdlp({ check: true }));
+    $('ytdlpUpdateBtn').addEventListener('click', () => this._updateYtdlp());
+    $('ytdlpRevertBtn').addEventListener('click', () => this._revertYtdlp());
     $('openLibraryBtn').addEventListener('click', () => {
       if (window.avt && window.avt.openLibrary) window.avt.openLibrary();
     });
@@ -1494,6 +1504,232 @@ class App {
       this._renderDiskPanel();
       this._toast(`${this._fmtSize(res.freed)} libérés`);
     } catch (_) { this._toast('Libération impossible'); }
+  }
+
+  /* ── Module de téléchargement (yt-dlp) ────────────────── */
+  async _refreshYtdlp({ check = false } = {}) {
+    let s;
+    try { s = await (await fetch(`${API}/updater/ytdlp?check=${check ? 'true' : 'false'}`)).json(); }
+    catch (_) { return; }
+    this._ytdlp = s;
+
+    const dot = $('ytdlpStatus').querySelector('.dot');
+    const txt = $('ytdlpStatus').querySelector('.txt');
+    const note = $('ytdlpNote');
+    txt.textContent = s.installed ? `version ${s.installed}` : 'version inconnue';
+    dot.style.background = s.override_active ? 'var(--accent)' : 'var(--line)';
+    $('ytdlpRevertBtn').style.display = s.override_active ? '' : 'none';
+
+    if (s.updating) {
+      const st = (s.progress && s.progress.state) || 'downloading';
+      const labels = { checking: 'vérification', downloading: 'téléchargement', installing: 'installation' };
+      note.textContent = `Mise à jour en cours — ${labels[st] || st}…`;
+      $('ytdlpUpdateBtn').disabled = true;
+      clearTimeout(this._ytdlpTimer);
+      this._ytdlpTimer = setTimeout(() => this._refreshYtdlp(), 1200);
+      return;
+    }
+
+    $('ytdlpUpdateBtn').disabled = false;
+    const r = s.last_result || {};
+    if (r.error) {
+      note.textContent = `Mise à jour échouée : ${r.error}. La version d'origine reste en place.`;
+    } else if (r.restart_required) {
+      note.textContent = `Version ${r.version} installée — redémarrez l'application pour l'utiliser.`;
+    } else if (s.check_error) {
+      note.textContent = `Vérification impossible : ${s.check_error}`;
+    } else if (s.latest && s.latest !== s.installed) {
+      note.textContent = `Version ${s.latest} disponible.`;
+    } else if (s.latest) {
+      note.textContent = 'Vous avez la dernière version.';
+    } else {
+      note.textContent = s.override_active
+        ? "Version mise à jour, différente de celle livrée avec l'application."
+        : "Version livrée avec l'application.";
+    }
+  }
+
+  async _updateYtdlp() {
+    try {
+      await fetch(`${API}/updater/ytdlp`, { method: 'POST' });
+      this._refreshYtdlp();
+    } catch (_) { this._toast('Mise à jour impossible'); }
+  }
+
+  async _revertYtdlp() {
+    if (!confirm("Revenir au module livré avec l'application ?\n\nLa mise à jour téléchargée sera supprimée.")) return;
+    try {
+      await fetch(`${API}/updater/ytdlp`, { method: 'DELETE' });
+      this._toast("Version d'origine rétablie — redémarrez l'application");
+      this._refreshYtdlp();
+    } catch (_) { this._toast('Opération impossible'); }
+  }
+
+  /* ── Connexion aux plateformes ────────────────────────── */
+  async _refreshAuth() {
+    let a;
+    try { a = await (await fetch(`${API}/platforms/auth`)).json(); }
+    catch (_) { return; }
+    const sel = $('cookieBrowser');
+    if (sel.options.length <= 1) {
+      const labels = {
+        chrome: 'Chrome', edge: 'Edge', firefox: 'Firefox', brave: 'Brave',
+        chromium: 'Chromium', opera: 'Opera', vivaldi: 'Vivaldi', safari: 'Safari',
+      };
+      for (const b of a.supported) {
+        const opt = document.createElement('option');
+        opt.value = b;
+        opt.textContent = labels[b] || b;
+        sel.appendChild(opt);
+      }
+    }
+    sel.value = a.browser || '';
+  }
+
+  async _saveAuth() {
+    const browser = $('cookieBrowser').value;
+    try {
+      await fetch(`${API}/platforms/auth`, this._libJson('POST', { browser }));
+      this._toast(browser
+        ? `Session ${$('cookieBrowser').selectedOptions[0].textContent} utilisée pour les contenus protégés`
+        : 'Aucune session utilisée');
+    } catch (_) { this._toast('Réglage impossible'); }
+  }
+
+  /* ── Emplacement de la bibliothèque ───────────────────── */
+  async _refreshLocation() {
+    let loc;
+    try { loc = await (await fetch(`${API}/library/location`)).json(); }
+    catch (_) { return; }
+    this._location = loc;
+
+    $('diskPath').textContent = loc.path;
+    if (!$('libraryPath').matches(':focus')) $('libraryPath').value = '';
+    $('libraryPath').placeholder = loc.is_default ? 'D:\\mes-transcriptions' : loc.default_path;
+    $('resetLocationBtn').style.display = loc.is_default ? 'none' : '';
+
+    const free = $('diskFree');
+    if (loc.free_bytes != null) {
+      const share = loc.total_bytes ? loc.free_bytes / loc.total_bytes : 1;
+      free.textContent = `${this._fmtSize(loc.free_bytes)} libres sur ce disque`;
+      // Rien n'est purgé automatiquement : un disque qui se remplit doit se voir
+      free.classList.toggle('low', loc.free_bytes < 2e9 || share < 0.03);
+      if (free.classList.contains('low')) {
+        free.textContent += ' — déplacez la bibliothèque sur un autre disque';
+      }
+    } else free.textContent = '';
+
+    const r = loc.relocation || {};
+    const bar = $('relocateBar');
+    if (r.state === 'copying') {
+      const ratio = r.total_bytes ? r.copied_bytes / r.total_bytes : 0;
+      bar.classList.add('show');
+      bar.firstElementChild.style.width = `${Math.round(ratio * 100)}%`;
+      $('relocateNote').textContent =
+        `Déplacement vers ${r.target} — ${this._fmtSize(r.copied_bytes)} sur ${this._fmtSize(r.total_bytes)}`;
+      $('relocateBtn').disabled = true;
+      clearTimeout(this._locTimer);
+      this._locTimer = setTimeout(() => this._refreshLocation(), 1200);
+    } else {
+      bar.classList.remove('show');
+      $('relocateBtn').disabled = false;
+      if (r.state === 'error') {
+        $('relocateNote').textContent = `Déplacement échoué : ${r.error}. Vos transcriptions sont restées en place.`;
+      } else if (r.state === 'done') {
+        $('relocateNote').textContent = 'Déplacement terminé.';
+      } else $('relocateNote').textContent = '';
+    }
+  }
+
+  async _relocate(path) {
+    const loc = this._location || {};
+    const target = path !== undefined ? path : $('libraryPath').value.trim();
+    if (path === undefined && !target) { this._toast('Indiquez un dossier de destination'); return; }
+
+    const size = this._fmtSize((this._libStats && this._libStats.bytes) || 0);
+    const dest = target || loc.default_path;
+    if (!confirm(
+      `Déplacer la bibliothèque vers :\n${dest}\n\n`
+      + `${size ? size + ' ' : ''}de transcriptions et d'audio vont être copiés, vérifiés, `
+      + `puis supprimés de l'ancien emplacement.\n\n`
+      + `Rien n'est effacé avant que la copie ne soit vérifiée.`
+    )) return;
+
+    try {
+      const r = await fetch(`${API}/library/location`, this._libJson('POST', { path: target }));
+      const data = await r.json();
+      if (!r.ok) { this._toast(data.detail || 'Déplacement impossible'); return; }
+      this._refreshLocation();
+    } catch (_) { this._toast('Déplacement impossible'); }
+  }
+
+  /* ── Moteur de traduction local ───────────────────────── */
+  async _refreshEngine() {
+    let s;
+    try { s = await (await fetch(`${API}/translate/status`)).json(); }
+    catch (_) { return; }
+    this._engine = s;
+
+    const dot = $('engineStatus').querySelector('.dot');
+    const txt = $('engineStatus').querySelector('.txt');
+    const btn = $('downloadEngineBtn');
+    const bar = $('engineBar');
+    const pct = s.ratio ? Math.round(s.ratio * 100) : 0;
+
+    if (s.downloading) {
+      txt.textContent = `téléchargement ${pct}%`;
+      dot.style.background = 'var(--muted)';
+      bar.classList.add('show');
+      bar.firstElementChild.style.width = `${pct}%`;
+      $('engineNote').textContent =
+        `${this._fmtSize(s.downloaded_bytes)} sur ${this._fmtSize(s.total_bytes)} · vous pouvez continuer à utiliser l'application`;
+      btn.disabled = true;
+      btn.textContent = 'Téléchargement en cours…';
+      // La fenêtre peut être réduite pendant 646 Mo : on pousse la progression
+      // sur l'icône de la barre des tâches quand l'application native l'expose.
+      if (window.avt && window.avt.setTaskbarProgress) window.avt.setTaskbarProgress(s.ratio || 0);
+      clearTimeout(this._engineTimer);
+      this._engineTimer = setTimeout(() => this._refreshEngine(), 1500);
+      return;
+    }
+
+    if (window.avt && window.avt.setTaskbarProgress) window.avt.setTaskbarProgress(-1);
+    bar.classList.remove('show');
+
+    if (s.is_downloaded) {
+      txt.textContent = s.is_loaded ? 'prêt' : 'installé';
+      dot.style.background = 'var(--accent)';
+      $('engineNote').textContent = 'La traduction fonctionne sans clé API ni connexion.';
+      btn.disabled = true;
+      btn.textContent = 'Modèle installé';
+    } else if (s.state === 'error') {
+      txt.textContent = 'échec';
+      dot.style.background = '#b4342a';
+      $('engineNote').textContent = `Téléchargement impossible : ${s.error || 'erreur inconnue'}`;
+      btn.disabled = false;
+      btn.textContent = 'Réessayer le téléchargement';
+    } else {
+      txt.textContent = 'non installé';
+      dot.style.background = 'var(--line)';
+      $('engineNote').textContent = 'Sans ce modèle, la traduction exige une clé API.';
+      btn.disabled = false;
+      btn.textContent = 'Télécharger le modèle (646 Mo)';
+    }
+  }
+
+  async _downloadEngine() {
+    const size = this._fmtSize((this._engine && this._engine.total_bytes) || 0) || '646 Mo';
+    const ok = confirm(
+      `Télécharger le modèle de traduction (${size}) ?\n\n`
+      + `Il est enregistré sur cet ordinateur une seule fois. Ensuite, la traduction `
+      + `fonctionne sans clé API et sans connexion.\n\n`
+      + `Vous pouvez continuer à utiliser l'application pendant le téléchargement.`
+    );
+    if (!ok) return;
+    try {
+      await fetch(`${API}/translate/download`, { method: 'POST' });
+      this._refreshEngine();
+    } catch (_) { this._toast('Téléchargement impossible'); }
   }
 
   /* Backend injoignable : on affiche l'ancien historique en lecture seule */

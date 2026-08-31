@@ -468,7 +468,21 @@
     }
     .hist-more-row:hover { border-style: solid; color: var(--ink); }
 
-    .set-card.disk { width: 100%; }
+    .set-card.disk, .set-card.engine, .set-card.auth, .set-card.updater { width: 100%; }
+    .engine-bar {
+      height: 6px; border-radius: 3px; background: var(--sand-deep);
+      overflow: hidden; display: none;
+    }
+    .engine-bar.show { display: block; }
+    .engine-bar span {
+      display: block; height: 100%; width: 0;
+      background: var(--night); transition: width .4s ease;
+    }
+    .engine-note { font-size: 11px; color: var(--muted); min-height: 14px; }
+    .disk-free { font-size: 10.5px; color: var(--muted); }
+    .disk-free.low { color: #b4342a; font-weight: 600; }
+    .relocate { display: flex; gap: 10px; align-items: center; }
+    .relocate .set-input { flex: 1; min-width: 0; }
     .disk-summary { font-size: 14px; color: var(--ink); }
     .disk-path {
       font-family: var(--mono); font-size: 10.5px; color: var(--faint);
@@ -1060,8 +1074,78 @@
           Rien n'est supprimé automatiquement : ni purge par ancienneté, ni quota.
           En échange votre historique grossit — comptez environ 1 Mo par minute d'audio conservé.
         </div>
+        <div class="disk-free mono" id="diskFree"></div>
+        <div class="relocate" id="relocateRow">
+          <input type="text" id="libraryPath" class="set-input" spellcheck="false"
+                 placeholder="D:\mes-transcriptions" autocomplete="off">
+          <button class="btn-secondary" id="relocateBtn">Déplacer</button>
+        </div>
+        <div class="engine-bar" id="relocateBar"><span></span></div>
+        <div class="engine-note mono" id="relocateNote"></div>
         <div class="set-actions">
           <button class="btn-secondary" id="freeSpaceBtn">Libérer de l'espace</button>
+          <button class="btn-secondary" id="resetLocationBtn">Emplacement par défaut</button>
+        </div>
+      </div>
+
+      <div class="set-card updater card">
+        <div class="set-card-head">
+          <div class="set-card-title">Module de téléchargement</div>
+          <div class="conn-status" id="ytdlpStatus">
+            <span class="dot"></span><span class="txt">—</span>
+          </div>
+        </div>
+        <div class="set-hint">
+          C'est lui qui sait dialoguer avec YouTube, TikTok, Instagram et les autres.
+          Ces sites changent souvent : quand une vidéo devient impossible à récupérer
+          alors que son lien s'ouvre dans un navigateur, c'est presque toujours ce module
+          qui a besoin d'être mis à jour. Il se met à jour seul, sans réinstaller l'application.
+        </div>
+        <div class="engine-note mono" id="ytdlpNote"></div>
+        <div class="set-actions">
+          <button class="btn-secondary" id="ytdlpCheckBtn">Vérifier</button>
+          <button class="btn-primary" id="ytdlpUpdateBtn">Mettre à jour</button>
+          <button class="btn-secondary" id="ytdlpRevertBtn" style="display:none">Revenir à la version d'origine</button>
+        </div>
+      </div>
+
+      <div class="set-card auth card">
+        <div class="set-card-head">
+          <div class="set-card-title">Contenus qui demandent une connexion</div>
+        </div>
+        <div class="set-hint">
+          Toutes les plateformes reconnues par l'application fonctionnent sans réglage.
+          Certaines exigent en revanche d'être connecté pour un contenu précis — Instagram,
+          Facebook, X, ou une vidéo privée. L'application peut alors réutiliser la session
+          d'un navigateur déjà ouvert sur cet ordinateur. Les cookies sont lus localement,
+          ne sont copiés nulle part et ne quittent pas la machine.
+        </div>
+        <div class="set-field">
+          <label for="cookieBrowser">Navigateur où vous êtes connecté</label>
+          <span class="select-wrap" style="width:260px">
+            <select id="cookieBrowser" class="opt-select" style="width:100%;background:var(--cream)">
+              <option value="">— aucun —</option>
+            </select>
+          </span>
+        </div>
+      </div>
+
+      <div class="set-card engine card">
+        <div class="set-card-head">
+          <div class="set-card-title">Traduction sans clé API</div>
+          <div class="conn-status" id="engineStatus">
+            <span class="dot"></span><span class="txt">non installé</span>
+          </div>
+        </div>
+        <div class="set-hint">
+          La traduction peut fonctionner entièrement sur votre ordinateur, sans clé et sans
+          connexion. Elle demande un modèle de 646 Mo, téléchargé seulement si vous le
+          demandez — il n'est pas inclus dans l'installation.
+        </div>
+        <div class="engine-bar" id="engineBar"><span></span></div>
+        <div class="engine-note mono" id="engineNote"></div>
+        <div class="set-actions">
+          <button class="btn-primary" id="downloadEngineBtn">Télécharger le modèle (646 Mo)</button>
         </div>
       </div>
     </section>

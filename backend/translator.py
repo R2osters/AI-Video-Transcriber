@@ -184,6 +184,37 @@ class Translator:
 
         return final_chunks
 
+    async def _translate_locally(
+        self, text: str, source_language: Optional[str], target_language: str
+    ) -> Optional[str]:
+        """本地引擎翻译；模型未下载或不可用时返回 None（由调用方决定如何提示）。
+
+        只在模型已经躺在磁盘上时才工作：下载是用户在界面上点出来的动作，
+        不能藏在一次转录里悄悄发生。
+        """
+        try:
+            import asyncio
+
+            from local_translate import ModelUnavailable, get_local_translator
+
+            engine = get_local_translator()
+            if not engine.is_downloaded:
+                return None
+
+            src = source_language or self._detect_source_language(text)
+            try:
+                translated = await asyncio.to_thread(
+                    engine.translate, text, src or "", target_language
+                )
+            except (ModelUnavailable, ValueError) as e:
+                logger.warning(f"本地翻译不可用: {e}")
+                return None
+            logger.info("使用本地 NLLB 引擎完成翻译")
+            return translated
+        except Exception as e:
+            logger.warning(f"本地翻译失败，回退为不翻译: {e}")
+            return None
+
     async def translate_text(self, text: str, target_language: str, source_language: Optional[str] = None) -> str:
         """
         翻译文本到目标语言
@@ -198,9 +229,14 @@ class Translator:
         """
         try:
             if not self.client:
-                logger.warning("OpenAI API不可用，无法翻译")
+                # 无 API Key 时改用本地 NLLB 引擎。**绝不在这里触发下载**：
+                # 模型有 646 MB，下载必须由用户在界面上明确同意后发起。
+                local = await self._translate_locally(text, source_language, target_language)
+                if local is not None:
+                    return local
+                logger.warning("OpenAI API 不可用且本地模型未下载，无法翻译")
                 return text
-            
+
             # 检测源语言
             if not source_language:
                 source_language = self._detect_source_language(text)

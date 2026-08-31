@@ -1219,7 +1219,7 @@ Rules:
         fallback_labels = self._get_fallback_labels(target_language)
         title = video_title if video_title else "Summary"
 
-        key_sentences = self._extractive_key_sentences(body, max_sentences=8)
+        key_sentences = self._local_key_sentences(body, max_sentences=8)
         bullets = "\n".join(f"- {s}" for s in key_sentences) if key_sentences else f"- {fallback_labels['content_description']}"
 
         summary = f"""# {title}
@@ -1239,6 +1239,22 @@ Rules:
 <p style="color: #888; font-style: italic; margin-top: 16px;"><em>{fallback_labels['fallback_disclaimer']}</em></p>"""
 
         return summary
+
+    def _local_key_sentences(self, text: str, max_sentences: int = 8) -> list:
+        """无 API 时的抽取式摘要：优先用 TextRank（local_summarize），
+        该模块不可用时退回本文件内的词频法。
+
+        两者都只是抽取原句，不生成新句子——没有模型就没有改写，界面必须如实说明。
+        """
+        try:
+            from local_summarize import key_sentences
+
+            picked = key_sentences(text, max_sentences=max_sentences)
+            if picked:
+                return picked
+        except Exception as e:
+            logger.warning(f"TextRank 摘要不可用，回退词频法: {e}")
+        return self._extractive_key_sentences(text, max_sentences=max_sentences)
 
     def _extractive_key_sentences(self, text: str, max_sentences: int = 8) -> list:
         """
