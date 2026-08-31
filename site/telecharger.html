@@ -138,6 +138,15 @@ npm run dist:full</div>
       <p>Le résultat atterrit dans <code>desktop/dist-installer/</code>.</p>
     </div>
   </div>
+
+  <div class="card" style="margin-top:22px">
+    <div class="kicker">macOS</div>
+    <h3>APPLE SILICON</h3>
+    <p>Un paquet <code>.dmg</code> arm64 est fabriqué par la CI sur un runner Apple, à chaque version. Il n'a jamais tourné sur un Mac réel : considérez-le comme une préversion.</p>
+    <p>Il n'est pas signé non plus. Gatekeeper refusera le premier lancement : faites un clic droit sur l'application, choisissez « Ouvrir », puis confirmez. Le double-clic habituel ne propose pas cette issue.</p>
+    <p>ffmpeg et ffprobe embarqués sont en x86_64 et passent par Rosetta&nbsp;2 — aucune source ne publie ces deux binaires en arm64 statique. L'application, elle, est native.</p>
+    <a class="btn btn-dark" href="https://github.com/R2osters/AI-Video-Transcriber/releases/tag/v1.1.0-mac" style="align-self:flex-start;margin-top:6px">Paquet macOS</a>
+  </div>
 </section>
 
 <!-- ── Après installation ────────────────────────────────────────────── -->
